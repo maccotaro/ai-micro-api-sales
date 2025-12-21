@@ -1,0 +1,49 @@
+[tool.poetry]
+name = "ai-micro-api-sales"
+version = "1.0.0"
+description = "Sales Support AI Service - Meeting Minutes Analysis and Proposal Generation"
+authors = ["AI Micro Service Team"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.32.0"}
+pydantic = "^2.9.0"
+pydantic-settings = "^2.5.0"
+sqlalchemy = "^2.0.35"
+psycopg2-binary = "^2.9.10"
+asyncpg = "^0.30.0"
+httpx = "^0.27.2"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+python-multipart = "^0.0.12"
+redis = "^5.2.0"
+langchain = "^0.3.0"
+langchain-community = "^0.3.0"
+langchain-ollama = "^0.2.0"
+openai = "^1.51.0"
+neo4j = "^5.25.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+black = "^24.10.0"
+ruff = "^0.7.0"
+mypy = "^1.12.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
