@@ -32,7 +32,7 @@ PROPOSAL_SYSTEM_PROMPT = """あなたは営業支援AIアシスタントです�
 ## あなたの役割
 1. 顧客の課題・ニーズを理解する
 2. 適切な商材を推薦する
-3. 料金情報を提示する
+3. 【重要】下記の「料金情報」セクションから具体的な金額を必ず提示する
 4. 提案書のドラフトを作成する
 
 ## 利用可能な商材名（正式名称）
@@ -43,13 +43,27 @@ PROPOSAL_SYSTEM_PROMPT = """あなたは営業支援AIアシスタントです�
 ## 検索された商材情報
 {product_context}
 
-## 料金情報
+## 料金情報（必ずこの金額を提案に含めること）
 {pricing_context}
+
+## 回答形式
+以下の形式で回答してください：
+
+### 推奨商材
+（商材名と推奨理由）
+
+### 料金プラン
+（**必ず上記「料金情報」セクションの具体的な金額を記載**）
+例：
+- 商品名: ¥XXX,XXX（エリア）
+
+### 提案理由
+（なぜこの商材が顧客に適しているか）
 
 ## 指示
 - 顧客の要件に最も適した商材を推薦してください
 - 商材名は「利用可能な商材名」に記載された正式名称を使用してください
-- 具体的な料金プランを提示してください
+- 【最重要】「料金情報」セクションに記載された具体的な金額（¥で始まる数字）を必ず提案に含めてください
 - 提案理由を明確に説明してください
 - 日本語で回答してください
 - 不明な点がある場合は追加質問してください
@@ -261,17 +275,19 @@ class ProposalChatService:
         if not pricing_info:
             return "（料金情報が見つかりませんでした）"
 
-        context_parts = []
+        context_parts = ["以下は提案時に使用すべき正式な料金です：\n"]
         for media_name, plans in pricing_info.items():
-            context_parts.append(f"### {media_name}")
+            context_parts.append(f"【{media_name}】の料金表:")
             for plan in plans[:5]:  # Limit plans per media
                 price_str = f"¥{plan['price']:,.0f}" if plan['price'] else "要問合せ"
                 area_str = plan['area'] if plan['area'] else "全国"
-                period_str = plan['listing_period'] if plan['listing_period'] else ""
+                period_str = f"({plan['listing_period']})" if plan['listing_period'] else ""
+                category_str = f"[{plan['category']}] " if plan.get('category') else ""
 
                 context_parts.append(
-                    f"- {plan['product_name']}: {price_str} ({area_str}) {period_str}"
+                    f"  - {category_str}{plan['product_name']}: {price_str} / {area_str} {period_str}"
                 )
+            context_parts.append("")  # Add blank line between media
 
         return "\n".join(context_parts)
 
