@@ -14,16 +14,19 @@
 
 ```
 ai-micro-api-sales (Port 8005)
-    ↓
-salesdb (PostgreSQL)  ← 共有データベース
-    ↑
-ai-micro-api-admin (Port 8003)  ← マスタデータ管理
-
-ai-micro-api-auth (Port 8002)  ← JWT認証
-    ↓
-Ollama (Port 11434)  ← LLM処理
-    ↓
-Neo4j (Port 7687)  ← グラフデータベース
+    │
+    ├── salesdb (PostgreSQL) ← 共有データベース
+    │
+    ├── api-rag (Port 8010) ← 9段階ハイブリッド検索パイプライン
+    │   └── GraphRAG, BM25, Cross-Encoder統合
+    │
+    ├── api-admin (Port 8003) ← マスタデータ管理（フォールバック用）
+    │
+    ├── api-auth (Port 8002) ← JWT認証
+    │
+    ├── Ollama (Port 11434) ← LLM処理
+    │
+    └── Neo4j (Port 7687) ← グラフデータベース
 ```
 
 ### 主要機能
@@ -46,6 +49,13 @@ Neo4j (Port 7687)  ← グラフデータベース
    - Neo4jによる関係性ベース推薦
    - 類似議事録検索（問題・ニーズ共有）
    - 成功事例マッチング
+
+5. **商材提案チャット** (`/api/sales/proposal-chat`) ★重要
+   - **9段階ハイブリッド検索パイプライン**（api-rag連携）
+   - GraphRAG Query Expansion
+   - BM25 + Cross-Encoder Re-ranking
+   - 料金情報連携
+   - LLMによる提案生成
 
 ## ディレクトリ構造
 
@@ -135,6 +145,68 @@ ai-micro-api-sales/
 | GET | `/stats` | テナントのグラフ統計情報 |
 | DELETE | `/meetings/{minute_id}` | 議事録関連グラフデータ削除 |
 
+## 商材提案チャット（9段階ハイブリッド検索）
+
+### 概要
+
+**ProposalChatService**は、api-ragの9段階ハイブリッド検索パイプラインを使用して
+商材検索を実行します。これにより、front-adminのチャット機能と同一の検索ロジック
+（GraphRAG、BM25、Cross-Encoder等）が適用されます。
+
+### 9段階パイプライン
+
+| Stage | 処理内容 | 説明 |
+|-------|---------|------|
+| 0 | Graph Query Expansion | Neo4jでエンティティ関係探索 |
+| 1 | Atlas層フィルタリング | KB/Collection要約ベクトルで事前絞り込み |
+| 2 | メタデータフィルタ構築 | テナント、部署等のフィルタ生成 |
+| 3 | Sparse検索 | BM25全文検索（100件取得） |
+| 4 | Dense検索 | HNSWベクトル検索（100件取得） |
+| 5 | RRFマージ | Sparse + Denseの統合スコアリング |
+| 6 | BM25 Re-ranker | 600件→100件に絞り込み |
+| 7 | Cross-Encoder | 100件→10件に精密リランキング |
+| 8 | Graph Context Enrichment | エンティティ関係情報を付加 |
+
+### エンドポイント
+
+| メソッド | パス | 説明 |
+|---------|------|------|
+| POST | `/stream` | SSEストリーミング提案生成 |
+| POST | `/generate` | 非ストリーミング提案生成 |
+| GET | `/health` | サービスヘルスチェック |
+
+### 使用例
+
+```bash
+# ストリーミング提案生成
+curl -X POST http://localhost:8005/api/sales/proposal-chat/stream \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "飲食店の人材採用で困っている。予算は50万円程度",
+    "knowledge_base_id": "xxx-xxx-xxx",
+    "area": "関東"
+  }'
+```
+
+### 処理フロー
+
+```
+1. 顧客要件/議事録入力
+   ↓
+2. api-rag 9段階ハイブリッド検索（GraphRAG含む）
+   ↓
+3. 検索結果からmedia_name抽出
+   ↓
+4. salesdb.media_pricingから料金情報取得
+   ↓
+5. LLM提案生成（コンテキスト: 商材情報 + 料金情報）
+   ↓
+6. SSEストリーミングレスポンス
+```
+
+---
+
 ## ベクトル検索機能
 
 ### 概要
@@ -203,9 +275,13 @@ REDIS_URL=redis://:password@host.docker.internal:6379
 
 # Authentication
 AUTH_SERVICE_URL=http://host.docker.internal:8002
+ADMIN_SERVICE_URL=http://host.docker.internal:8003
 JWKS_URL=http://host.docker.internal:8002/.well-known/jwks.json
 JWT_ISSUER=https://auth.example.com
 JWT_AUDIENCE=fastapi-api
+
+# RAG Service (9段階ハイブリッド検索パイプライン) ★重要
+RAG_SERVICE_URL=http://host.docker.internal:8010
 
 # LLM
 OLLAMA_BASE_URL=http://host.docker.internal:11434
@@ -373,6 +449,7 @@ curl http://localhost:8005/api/sales/graph/health
 
 ## 関連サービス
 
+- **ai-micro-api-rag** (Port 8010): 9段階ハイブリッド検索パイプライン ★商材提案チャットで使用
 - **ai-micro-api-admin**: マスタデータ管理（商品、キャンペーン等）
 - **ai-micro-api-auth**: 認証サービス
 - **ai-micro-neo4j**: グラフデータベース（GraphRAG用）
@@ -381,5 +458,5 @@ curl http://localhost:8005/api/sales/graph/health
 ---
 
 **作成日**: 2025-12-17
-**更新日**: 2025-12-18
-**バージョン**: 1.1.0
+**更新日**: 2026-01-21
+**バージョン**: 1.2.0

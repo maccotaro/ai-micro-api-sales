@@ -104,3 +104,32 @@ class WageData(SalesDBBase):
         Index("idx_wage_data_industry", "industry"),
         Index("idx_wage_data_effective_date", "effective_date"),
     )
+
+
+class MediaPricing(SalesDBBase):
+    """媒体別料金表 (Read-only) - 商材提案RAG用"""
+    __tablename__ = "media_pricing"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    media_name = Column(String(100), nullable=False)
+    category_large = Column(String(100))
+    category_medium = Column(String(100))
+    product_name = Column(String(255), nullable=False)
+    listing_rank = Column(String(100))
+    location_count = Column(Integer)
+    listing_period = Column(String(100))
+    quantity = Column(Integer)
+    price_type = Column(String(50))
+    area = Column(String(100))
+    price = Column(DECIMAL(12, 2))
+    rate = Column(Integer)
+    rate_basis = Column(String(100))
+    application_start_date = Column(DATE)
+    application_end_date = Column(DATE)
+    remarks = Column(Text)
+
+    __table_args__ = (
+        Index("idx_media_pricing_media_name", "media_name"),
+        Index("idx_media_pricing_area", "area"),
+        Index("idx_media_pricing_product_name", "product_name"),
+    )

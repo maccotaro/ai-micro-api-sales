@@ -11,6 +11,7 @@ services:
       - REDIS_URL=redis://:password@host.docker.internal:6379
       - AUTH_SERVICE_URL=http://host.docker.internal:8002
       - ADMIN_SERVICE_URL=http://host.docker.internal:8003
+      - RAG_SERVICE_URL=http://host.docker.internal:8010
       - JWKS_URL=http://host.docker.internal:8002/.well-known/jwks.json
       - JWT_ISSUER=https://auth.example.com
       - JWT_AUDIENCE=fastapi-api

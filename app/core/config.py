@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     auth_service_url: str = "http://localhost:8002"
     admin_service_url: str = "http://localhost:8003"
     jwks_url: str = "http://localhost:8002/.well-known/jwks.json"
+
+    # RAG Service (9-stage hybrid search pipeline)
+    rag_service_url: str = "http://localhost:8010"
     jwt_issuer: str = "https://auth.example.com"
     jwt_audience: str = "fastapi-api"
 
