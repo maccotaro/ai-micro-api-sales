@@ -224,7 +224,8 @@ class ProposalChatService:
                 query += " AND area = :area"
                 params["area"] = area
 
-            query += " ORDER BY category_large, product_name LIMIT 10"
+            # 価格の高い順にソートして重要なプランを優先取得
+            query += " ORDER BY price DESC NULLS LAST, category_large, product_name LIMIT 20"
 
             result = db.execute(text(query), params)
             rows = result.fetchall()
@@ -275,10 +276,10 @@ class ProposalChatService:
         if not pricing_info:
             return "（料金情報が見つかりませんでした）"
 
-        context_parts = ["以下は提案時に使用すべき正式な料金です：\n"]
+        context_parts = ["以下は提案時に使用すべき正式な料金です（価格順）：\n"]
         for media_name, plans in pricing_info.items():
             context_parts.append(f"【{media_name}】の料金表:")
-            for plan in plans[:5]:  # Limit plans per media
+            for plan in plans[:15]:  # Show up to 15 plans per media (sorted by price desc)
                 price_str = f"¥{plan['price']:,.0f}" if plan['price'] else "要問合せ"
                 area_str = plan['area'] if plan['area'] else "全国"
                 period_str = f"({plan['listing_period']})" if plan['listing_period'] else ""
