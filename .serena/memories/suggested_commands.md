@@ -1,64 +1,137 @@
-# 推奨コマンド
+# ai-micro-api-sales 開発コマンド
 
-## 開発環境セットアップ
+## 開発環境
+
+### 依存関係インストール
 ```bash
-# 依存関係インストール
 poetry install
+```
 
-# 開発サーバー起動（自動リロード）
+### ローカル開発サーバー起動
+```bash
 poetry run uvicorn app.main:app --host 0.0.0.0 --port 8005 --reload
 ```
 
 ## コード品質
+
+### フォーマット
 ```bash
-# フォーマット
 poetry run black .
+```
 
-# リント
+### リンティング
+```bash
 poetry run ruff check .
+poetry run ruff check . --fix
+```
 
-# 型チェック
+### 型チェック
+```bash
 poetry run mypy app/
+```
 
-# テスト実行
+### テスト
+```bash
 poetry run pytest
 ```
 
 ## Docker操作
+
+### コンテナ起動
 ```bash
-# ビルドと起動
 docker compose up -d --build
+```
 
-# ログ表示
-docker compose logs -f sales-api
-
-# コンテナ再起動
+### コンテナ再起動
+```bash
 docker compose restart sales-api
+```
 
-# ヘルスチェック
+### ログ確認
+```bash
+docker compose logs -f sales-api
+```
+
+### ヘルスチェック
+```bash
 curl http://localhost:8005/healthz
 ```
 
-## サービス確認
+## API確認
+
+### Swagger UI
+http://localhost:8005/docs
+
+### 議事録作成
 ```bash
-# Ollama接続確認
-curl http://localhost:11434/api/tags
-
-# Neo4j接続確認
-curl http://localhost:8005/api/sales/graph/health
-
-# JWKS確認
-curl http://localhost:8002/.well-known/jwks.json
-
-# salesdb確認
-docker exec ai-micro-postgres psql -U postgres -d salesdb -c "\dt"
+curl -X POST http://localhost:8005/api/sales/meeting-minutes \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_name": "テスト株式会社",
+    "content": "商談内容...",
+    "industry": "IT"
+  }'
 ```
 
-## API テスト例
+### 議事録解析
 ```bash
-# ストリーミング提案生成
+curl -X POST http://localhost:8005/api/sales/meeting-minutes/{id}/analyze \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 商材提案チャット（9段階ハイブリッド検索）
+```bash
 curl -X POST http://localhost:8005/api/sales/proposal-chat/stream \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"query": "人材採用の課題", "knowledge_base_id": "xxx"}'
+  -d '{
+    "query": "人材採用で困っている",
+    "knowledge_base_id": "xxx",
+    "area": "関東"
+  }'
+```
+
+### グラフ推薦取得
+```bash
+curl http://localhost:8005/api/sales/graph/recommendations/{minute_id} \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## 関連サービス確認
+
+### Ollama接続確認
+```bash
+curl http://localhost:11434/api/tags
+```
+
+### Neo4j接続確認
+```bash
+curl http://localhost:8005/api/sales/graph/health
+```
+
+### api-rag接続確認
+```bash
+curl http://localhost:8010/health
+```
+
+## データベース
+
+### salesdb接続
+```bash
+docker exec ai-micro-postgres psql -U postgres -d salesdb
+```
+
+### テーブル確認
+```bash
+docker exec ai-micro-postgres psql -U postgres -d salesdb -c "\dt"
+```
+
+## トラブルシューティング
+
+### コンテナ再ビルド
+```bash
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```

@@ -14,12 +14,25 @@ logger = logging.getLogger(__name__)
 
 # Sync engine and session for salesdb
 sync_database_url = settings.salesdb_url
-sync_engine = create_engine(sync_database_url)
+sync_engine = create_engine(
+    sync_database_url,
+    pool_pre_ping=True,       # Health check before use
+    pool_size=20,             # Base pool size
+    max_overflow=30,          # Additional connections when pool is full
+    pool_recycle=3600,        # Recycle connections after 1 hour
+    pool_timeout=30,          # Timeout for getting connection
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine)
 
 # Async engine and session for salesdb
 async_database_url = settings.salesdb_url.replace("postgresql://", "postgresql+asyncpg://")
-async_engine = create_async_engine(async_database_url)
+async_engine = create_async_engine(
+    async_database_url,
+    pool_pre_ping=True,
+    pool_size=20,
+    max_overflow=30,
+    pool_recycle=3600,
+)
 AsyncSessionLocal = async_sessionmaker(
     autocommit=False, autoflush=False, bind=async_engine, class_=AsyncSession
 )
