@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.model_settings_client import get_embedding_model
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class EmbeddingService:
 
             self.embeddings = OllamaEmbeddings(
                 base_url=settings.ollama_base_url,
-                model=settings.default_embedding_model,
+                model=get_embedding_model(),
             )
 
             # Test embedding generation

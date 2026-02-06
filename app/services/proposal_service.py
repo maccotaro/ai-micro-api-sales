@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.core.config import settings
+from app.core.model_settings_client import get_chat_model
 from app.models.meeting import MeetingMinute, ProposalHistory
 from app.models.master import Product, Campaign
 from app.schemas.meeting import (
@@ -78,7 +79,7 @@ class ProposalService:
 
     def __init__(self):
         self.llm = ChatOllama(
-            model=settings.default_llm_model,
+            model=get_chat_model(),
             base_url=settings.ollama_base_url,
             temperature=0.5,
         )

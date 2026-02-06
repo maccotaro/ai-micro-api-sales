@@ -24,11 +24,11 @@ class Settings(BaseSettings):
     jwt_issuer: str = "https://auth.example.com"
     jwt_audience: str = "fastapi-api"
 
-    # LLM Services
+    # LLM Services (model names are managed via DB system_settings, fetched via internal API)
     ollama_base_url: str = "http://localhost:11434"
     openai_api_key: str = ""
-    default_llm_model: str = "gemma2:9b"
-    default_embedding_model: str = "bge-m3:567m"
+    admin_internal_url: str = "http://localhost:8003"
+    internal_api_secret: str = "change-me-in-production"
 
     # Neo4j Graph Database
     neo4j_uri: str = "bolt://localhost:7687"

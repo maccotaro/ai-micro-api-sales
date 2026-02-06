@@ -14,6 +14,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.model_settings_client import get_chat_model
 from app.models.meeting import MeetingMinute
 from app.models.chat import ChatConversation, ChatMessage
 from app.schemas.chat import ChatMessageResponse, ChatHistoryResponse
@@ -45,7 +46,7 @@ class ChatService:
 
     def __init__(self):
         self.llm = ChatOllama(
-            model=settings.default_llm_model,
+            model=get_chat_model(),
             base_url=settings.ollama_base_url,
             temperature=0.5,
         )
