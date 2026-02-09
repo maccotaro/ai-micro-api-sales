@@ -98,6 +98,7 @@ class ProposalChatService:
         tenant_id: UUID,
         jwt_token: str,
         top_k: int = 10,
+        pipeline_version: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         api-ragの9段階ハイブリッド検索パイプラインで商材ドキュメントを検索。
@@ -125,17 +126,21 @@ class ProposalChatService:
         """
         search_url = f"{self.rag_service_url}/api/rag/search/hybrid"
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             try:
+                search_json: Dict[str, Any] = {
+                    "query": query,
+                    "tenant_id": str(tenant_id),
+                    "knowledge_base_id": str(knowledge_base_id),
+                    "top_k": top_k,
+                    "enable_graph": True,  # GraphRAG有効化
+                }
+                if pipeline_version:
+                    search_json["pipeline_version"] = pipeline_version
+
                 response = await client.post(
                     search_url,
-                    json={
-                        "query": query,
-                        "tenant_id": str(tenant_id),
-                        "knowledge_base_id": str(knowledge_base_id),
-                        "top_k": top_k,
-                        "enable_graph": True,  # GraphRAG有効化
-                    },
+                    json=search_json,
                     headers={
                         "Authorization": f"Bearer {jwt_token}",
                         "Content-Type": "application/json",
@@ -144,9 +149,9 @@ class ProposalChatService:
                 response.raise_for_status()
                 data = response.json()
 
-                results = data.get("results", [])
-                metrics = data.get("metrics", {})
-                graph_expansion = data.get("graph_expansion", {})
+                results = data.get("results") or []
+                metrics = data.get("metrics") or {}
+                graph_expansion = data.get("graph_expansion") or {}
 
                 logger.info(
                     f"Hybrid search completed: {len(results)} results, "
@@ -158,9 +163,9 @@ class ProposalChatService:
                 formatted_results = []
                 for item in results:
                     formatted_results.append({
-                        "content": item.get("content", ""),
-                        "metadata": item.get("metadata", {}),
-                        "score": item.get("final_score", item.get("cross_encoder_score", 0.0)),
+                        "content": item.get("content") or "",
+                        "metadata": item.get("metadata") or {},
+                        "score": item.get("final_score") or item.get("cross_encoder_score") or 0.0,
                         "graph_context": item.get("graph_context"),
                     })
 
@@ -182,7 +187,7 @@ class ProposalChatService:
         """
         media_names = set()
         for result in search_results:
-            metadata = result.get("metadata", {})
+            metadata = result.get("metadata") or {}
             media_name = metadata.get("media_name")
             if media_name:
                 media_names.add(media_name)
@@ -257,7 +262,7 @@ class ProposalChatService:
 
         context_parts = []
         for i, result in enumerate(search_results[:5], 1):
-            metadata = result.get("metadata", {})
+            metadata = result.get("metadata") or {}
             filename = metadata.get("filename", metadata.get("original_filename", "不明"))
             media_name = metadata.get("media_name", "未設定")
             content = result.get("content", "")[:500]  # Limit content length
@@ -301,6 +306,8 @@ class ProposalChatService:
         jwt_token: str,
         db: Session,
         area: Optional[str] = None,
+        pipeline_version: Optional[str] = None,
+        model: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """
         商材提案をストリーミング生成（9段階ハイブリッド検索使用）。
@@ -327,6 +334,7 @@ class ProposalChatService:
                 tenant_id=tenant_id,
                 jwt_token=jwt_token,
                 top_k=10,
+                pipeline_version=pipeline_version,
             )
 
             if not search_results:
@@ -350,7 +358,15 @@ class ProposalChatService:
             # 商材名リストを作成（正式名称をLLMに明示）
             media_names_list = ", ".join(media_names) if media_names else "（なし）"
 
-            # Step 5: LLM呼び出し
+            # Step 5: LLM呼び出し（モデル指定時はリクエストローカルなインスタンスを使用）
+            llm = self.llm
+            if model:
+                llm = ChatOllama(
+                    model=model,
+                    base_url=settings.ollama_base_url,
+                    temperature=0.5,
+                )
+
             system_prompt = PROPOSAL_SYSTEM_PROMPT.format(
                 media_names_list=media_names_list,
                 product_context=product_context,
@@ -363,7 +379,7 @@ class ProposalChatService:
             ]
 
             full_response = ""
-            async for chunk in self.llm.astream(messages):
+            async for chunk in llm.astream(messages):
                 if chunk.content:
                     full_response += chunk.content
                     yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.content})}\n\n"
@@ -383,6 +399,8 @@ class ProposalChatService:
         jwt_token: str,
         db: Session,
         area: Optional[str] = None,
+        pipeline_version: Optional[str] = None,
+        model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         商材提案を生成（非ストリーミング、9段階ハイブリッド検索使用）。
@@ -404,6 +422,7 @@ class ProposalChatService:
             knowledge_base_id=knowledge_base_id,
             tenant_id=tenant_id,
             jwt_token=jwt_token,
+            pipeline_version=pipeline_version,
         )
 
         # Step 2: media_name抽出
@@ -419,7 +438,15 @@ class ProposalChatService:
         # 商材名リストを作成（正式名称をLLMに明示）
         media_names_list = ", ".join(media_names) if media_names else "（なし）"
 
-        # Step 5: LLM呼び出し
+        # Step 5: LLM呼び出し（モデル指定時はリクエストローカルなインスタンスを使用）
+        llm = self.llm
+        if model:
+            llm = ChatOllama(
+                model=model,
+                base_url=settings.ollama_base_url,
+                temperature=0.5,
+            )
+
         system_prompt = PROPOSAL_SYSTEM_PROMPT.format(
             media_names_list=media_names_list,
             product_context=product_context,
@@ -431,7 +458,7 @@ class ProposalChatService:
             HumanMessage(content=query),
         ]
 
-        response = await self.llm.ainvoke(messages)
+        response = await llm.ainvoke(messages)
 
         return {
             "proposal": response.content,

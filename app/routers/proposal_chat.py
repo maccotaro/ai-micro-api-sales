@@ -45,6 +45,14 @@ class ProposalChatRequest(BaseModel):
         None,
         description="エリアフィルタ（例: 関東、関西）",
     )
+    pipeline: Optional[str] = Field(
+        None,
+        description="パイプラインバージョン（例: v1, v2）",
+    )
+    model: Optional[str] = Field(
+        None,
+        description="使用するチャットモデル名",
+    )
 
 
 class ProposalResponse(BaseModel):
@@ -121,6 +129,8 @@ async def stream_proposal_chat(
             jwt_token=jwt_token,
             db=db,
             area=request.area,
+            pipeline_version=request.pipeline,
+            model=request.model,
         ),
         media_type="text/event-stream",
         headers={
@@ -168,6 +178,8 @@ async def generate_proposal(
             jwt_token=jwt_token,
             db=db,
             area=request.area,
+            pipeline_version=request.pipeline,
+            model=request.model,
         )
 
         return ProposalResponse(
