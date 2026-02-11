@@ -5,6 +5,7 @@ Generates sales proposals based on meeting analysis and product matching.
 """
 import logging
 import json
+import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
@@ -48,8 +49,9 @@ PROPOSAL_PROMPT = """あなたは営業支援AIアシスタントです。以下
 {products}
 
 ## 出力形式（JSON）
-以下のJSON形式で出力してください。
+以下のJSON形式で出力してください。JSONのみを出力し、説明や補足は不要です。
 
+```json
 {{
     "title": "提案タイトル",
     "summary": "提案の概要（3-5文）",
@@ -59,7 +61,7 @@ PROPOSAL_PROMPT = """あなたは営業支援AIアシスタントです。以下
             "product_name": "商品名",
             "category": "カテゴリ",
             "reason": "推奨理由（課題・ニーズとの関連を具体的に）",
-            "match_score": 0.0-1.0
+            "match_score": 0.8
         }}
     ],
     "talking_points": [
@@ -71,6 +73,9 @@ PROPOSAL_PROMPT = """あなたは営業支援AIアシスタントです。以下
         "導入が難しい": "導入に対する回答"
     }}
 }}
+```
+
+JSONのみを出力してください。
 """
 
 
@@ -246,17 +251,35 @@ class ProposalService:
     ) -> Dict[str, Any]:
         """Parse LLM response as JSON."""
         try:
-            response = response.strip()
+            text = response.strip()
 
-            # Handle markdown code blocks
-            if response.startswith("```json"):
-                response = response[7:]
-            if response.startswith("```"):
-                response = response[3:]
-            if response.endswith("```"):
-                response = response[:-3]
+            parsed = None
 
-            data = json.loads(response.strip())
+            # Strategy 1: Extract from markdown code block
+            for pattern in [r'```json\s*([\s\S]*?)\s*```', r'```\s*([\s\S]*?)\s*```']:
+                match = re.search(pattern, text)
+                if match:
+                    try:
+                        parsed = json.loads(match.group(1).strip())
+                        break
+                    except json.JSONDecodeError:
+                        continue
+
+            # Strategy 2: First { to last } extraction
+            if parsed is None:
+                start = text.find("{")
+                end = text.rfind("}") + 1
+                if start >= 0 and end > start:
+                    try:
+                        parsed = json.loads(text[start:end])
+                    except json.JSONDecodeError:
+                        pass
+
+            # Strategy 3: Full response
+            if parsed is None:
+                parsed = json.loads(text)
+
+            data = parsed
 
             # Validate and fix product IDs
             product_map = {p.name: str(p.id) for p in products}
@@ -267,7 +290,7 @@ class ProposalService:
 
             return data
 
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, TypeError, AttributeError) as e:
             logger.warning(f"Failed to parse proposal response: {e}")
             # Return minimal structure with available products
             return {

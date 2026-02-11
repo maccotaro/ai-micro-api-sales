@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from uuid import UUID
 
+import httpx
 from langchain_ollama import ChatOllama
 from sqlalchemy.orm import Session
 
@@ -128,10 +129,14 @@ class AnalysisService:
             meeting.status = "analyzed"
             db.commit()
 
-            # Store analysis in Neo4j graph for recommendations
+            # Extract v2 entities via api-admin internal API
+            entity_data = None
+            if store_in_graph:
+                entity_data = await self._extract_v2_entities(meeting, db)
+
+            # Store analysis in Neo4j graph using v2 schema
             if store_in_graph:
                 try:
-                    # Use default tenant_id if not provided
                     graph_tenant_id = tenant_id or UUID("00000000-0000-0000-0000-000000000000")
                     graph_data = {
                         "company_name": meeting.company_name,
@@ -140,16 +145,16 @@ class AnalysisService:
                         "issues": [i.get("issue", "") for i in analysis_data.get("issues", [])],
                         "needs": [n.get("need", "") for n in analysis_data.get("needs", [])],
                     }
-                    await sales_graph_service.store_meeting_analysis(
+                    await sales_graph_service.store_meeting_analysis_v2(
                         meeting_id=meeting.id,
                         tenant_id=graph_tenant_id,
                         user_id=meeting.created_by,
                         analysis_result=graph_data,
+                        entity_data=entity_data,
                     )
-                    logger.info(f"Stored analysis in graph for meeting: {meeting.id}")
+                    logger.info(f"Stored v2 analysis in graph for meeting: {meeting.id}")
                 except Exception as e:
-                    # Graph storage failure should not fail the analysis
-                    logger.warning(f"Failed to store analysis in graph: {e}")
+                    logger.warning(f"Failed to store v2 analysis in graph: {e}")
 
             logger.info(f"Analysis completed for meeting: {meeting.id}")
             return analysis
@@ -157,6 +162,79 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"Analysis failed for meeting {meeting.id}: {e}")
             raise
+
+    async def _extract_v2_entities(
+        self,
+        meeting: MeetingMinute,
+        db: Session,
+    ) -> Optional[Dict[str, Any]]:
+        """Extract v2 entities via api-admin internal API.
+
+        Splits meeting text into ~3000 char segments and calls the
+        internal entity extraction endpoint. Saves results to meeting record.
+        Returns entity_data on success, None on failure.
+        """
+        try:
+            meeting.entity_extraction_status = "processing"
+            db.commit()
+
+            # Split raw_text into segments of ~3000 chars
+            raw_text = meeting.raw_text or ""
+            segment_size = 3000
+            texts = []
+            for i in range(0, len(raw_text), segment_size):
+                segment = raw_text[i:i + segment_size]
+                if segment.strip():
+                    texts.append(segment)
+
+            if not texts:
+                meeting.entity_extraction_status = "completed"
+                meeting.entity_data = {
+                    "entities": {}, "relations": [],
+                    "statistics": {"total_entities": 0},
+                }
+                db.commit()
+                return meeting.entity_data
+
+            url = f"{settings.admin_service_url}/internal/graph/extract-entities"
+            async with httpx.AsyncClient(timeout=330.0) as client:
+                resp = await client.post(
+                    url,
+                    json={
+                        "texts": texts,
+                        "source_id": str(meeting.id),
+                        "source_type": "meeting",
+                        "timeout": 300,
+                    },
+                    headers={"X-Internal-Secret": settings.internal_api_secret},
+                )
+
+            if resp.status_code == 200:
+                result = resp.json()
+                if result.get("success"):
+                    meeting.entity_data = result.get("entity_data")
+                    meeting.entity_extraction_status = "completed"
+                    db.commit()
+                    logger.info(f"V2 entity extraction completed for meeting {meeting.id}")
+                    return meeting.entity_data
+
+            # Non-200 or unsuccessful
+            logger.warning(
+                f"V2 entity extraction failed for meeting {meeting.id}: "
+                f"status={resp.status_code}"
+            )
+            meeting.entity_extraction_status = "failed"
+            db.commit()
+            return None
+
+        except Exception as e:
+            logger.warning(f"V2 entity extraction error for meeting {meeting.id}: {e}")
+            try:
+                meeting.entity_extraction_status = "failed"
+                db.commit()
+            except Exception:
+                pass
+            return None
 
     async def _call_llm(self, prompt: str) -> str:
         """Call LLM and return response."""

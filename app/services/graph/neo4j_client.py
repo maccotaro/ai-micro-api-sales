@@ -154,12 +154,17 @@ class Neo4jClient:
         tenant_id: UUID,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        """Find products that solve a specific problem."""
+        """Find products related to a problem/need via v2 traversal.
+
+        Path: Concept(problem/need) → RELATED_TO → Concept(product)
+        """
         query = """
-        MATCH (prob:Problem {name: $problem_name, tenant_id: $tenant_id})
-              -[:SOLVED_BY]->(prod:Product)
-        RETURN prod.name as name, prod.description as description,
-               prod.category as category
+        MATCH (prob:Concept {name: $problem_name, tenant_id: $tenant_id})
+        WHERE prob.type IN ['problem', 'need']
+        MATCH (prob)-[:RELATED_TO]->(prod:Concept {type: 'product'})
+        WHERE prod.tenant_id = $tenant_id
+        RETURN prod.name as name, coalesce(prod.description, '') as description,
+               coalesce(prod.category, '') as category
         LIMIT $limit
         """
         return await self.execute_read(
@@ -177,14 +182,17 @@ class Neo4jClient:
         tenant_id: UUID,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        """Find success cases in a specific industry."""
+        """Find success cases via shared industry Condition and Chunks.
+
+        Path: Condition(industry) → MENTIONED_IN → Chunk
+        """
         query = """
-        MATCH (ind:Industry {name: $industry, tenant_id: $tenant_id})
-              <-[:OCCURS_IN]-(prob:Problem)
-              -[:MENTIONED_IN]->(c:Chunk)
-        WHERE c.document_type = 'success_case'
+        MATCH (ind:Condition {name: $industry, tenant_id: $tenant_id})
+        WHERE ind.type = 'industry'
+        MATCH (ind)-[:MENTIONED_IN]->(c:Chunk)
+        WHERE c.tenant_id = $tenant_id
         RETURN c.chunk_id as chunk_id, c.document_id as document_id,
-               prob.name as problem
+               ind.name as problem
         LIMIT $limit
         """
         return await self.execute_read(

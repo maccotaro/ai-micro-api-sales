@@ -29,6 +29,8 @@ class MeetingMinute(SalesDBBase):
     attendees = Column(JSONB, default=list)
     next_action_date = Column(DATE)
     status = Column(String(50), default="draft")
+    entity_data = Column(JSONB, nullable=True)
+    entity_extraction_status = Column(String(50), nullable=True)
     created_by = Column(UUID(as_uuid=True), nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
