@@ -9,12 +9,10 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List, AsyncGenerator
 from uuid import UUID, uuid4
 
-from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.model_settings_client import get_chat_model
+from app.services.llm_client import LLMClient
 from app.models.meeting import MeetingMinute
 from app.models.chat import ChatConversation, ChatMessage
 from app.schemas.chat import ChatMessageResponse, ChatHistoryResponse
@@ -45,10 +43,9 @@ class ChatService:
     """Chat service with streaming LLM responses."""
 
     def __init__(self):
-        self.llm = ChatOllama(
-            model=get_chat_model(),
-            base_url=settings.ollama_base_url,
-            temperature=0.5,
+        self.llm_client = LLMClient(
+            base_url=settings.llm_service_url,
+            secret=settings.internal_api_secret,
         )
 
     def _build_system_prompt(self, meeting: MeetingMinute) -> str:
@@ -90,21 +87,19 @@ class ChatService:
         history: List[ChatMessage],
         user_message: str,
         max_history: int = 10,
-    ) -> List:
+    ) -> List[Dict[str, str]]:
         """Build message list for LLM from conversation history."""
-        messages = [SystemMessage(content=system_prompt)]
+        messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
 
         # Add recent history (limit to prevent context overflow)
         recent_history = history[-max_history:] if len(history) > max_history else history
 
         for msg in recent_history:
-            if msg.role == "user":
-                messages.append(HumanMessage(content=msg.content))
-            elif msg.role == "assistant":
-                messages.append(AIMessage(content=msg.content))
+            if msg.role in ("user", "assistant"):
+                messages.append({"role": msg.role, "content": msg.content})
 
         # Add current user message
-        messages.append(HumanMessage(content=user_message))
+        messages.append({"role": "user", "content": user_message})
 
         return messages
 
@@ -208,10 +203,14 @@ class ChatService:
             # Send conversation_id first
             yield f"data: {json.dumps({'type': 'start', 'conversation_id': str(conversation.id), 'message_id': str(assistant_msg_id)})}\n\n"
 
-            async for chunk in self.llm.astream(messages):
-                if chunk.content:
-                    full_response += chunk.content
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.content})}\n\n"
+            async for token in self.llm_client.chat_stream(
+                messages=messages,
+                service_name="api-sales",
+                temperature=0.5,
+            ):
+                if token:
+                    full_response += token
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': token})}\n\n"
 
             # Save assistant message
             assistant_msg = ChatMessage(

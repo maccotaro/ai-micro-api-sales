@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     # LLM Services (model names are managed via DB system_settings, fetched via internal API)
     ollama_base_url: str = "http://localhost:11434"
+    llm_service_url: str = "http://localhost:8012"
     openai_api_key: str = ""
     admin_internal_url: str = "http://localhost:8003"
     internal_api_secret: str = "change-me-in-production"

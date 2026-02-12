@@ -16,13 +16,11 @@ from decimal import Decimal
 from uuid import UUID
 
 import httpx
-from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.model_settings_client import get_chat_model
+from app.services.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +79,9 @@ class ProposalChatService:
     """
 
     def __init__(self):
-        self.llm = ChatOllama(
-            model=get_chat_model(),
-            base_url=settings.ollama_base_url,
-            temperature=0.5,
+        self.llm_client = LLMClient(
+            base_url=settings.llm_service_url,
+            secret=settings.internal_api_secret,
         )
         # RAGサービス（9段階ハイブリッド検索）
         self.rag_service_url = settings.rag_service_url
@@ -358,15 +355,7 @@ class ProposalChatService:
             # 商材名リストを作成（正式名称をLLMに明示）
             media_names_list = ", ".join(media_names) if media_names else "（なし）"
 
-            # Step 5: LLM呼び出し（モデル指定時はリクエストローカルなインスタンスを使用）
-            llm = self.llm
-            if model:
-                llm = ChatOllama(
-                    model=model,
-                    base_url=settings.ollama_base_url,
-                    temperature=0.5,
-                )
-
+            # Step 5: LLM呼び出し
             system_prompt = PROPOSAL_SYSTEM_PROMPT.format(
                 media_names_list=media_names_list,
                 product_context=product_context,
@@ -374,15 +363,20 @@ class ProposalChatService:
             )
 
             messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=query),
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query},
             ]
 
             full_response = ""
-            async for chunk in llm.astream(messages):
-                if chunk.content:
-                    full_response += chunk.content
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.content})}\n\n"
+            async for token in self.llm_client.chat_stream(
+                messages=messages,
+                service_name="api-sales",
+                model=model,
+                temperature=0.5,
+            ):
+                if token:
+                    full_response += token
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': token})}\n\n"
 
             # Send completion event with metadata
             yield f"data: {json.dumps({'type': 'done', 'media_names': media_names, 'total_products': len(search_results), 'total_pricing': sum(len(p) for p in pricing_info.values())})}\n\n"
@@ -438,15 +432,7 @@ class ProposalChatService:
         # 商材名リストを作成（正式名称をLLMに明示）
         media_names_list = ", ".join(media_names) if media_names else "（なし）"
 
-        # Step 5: LLM呼び出し（モデル指定時はリクエストローカルなインスタンスを使用）
-        llm = self.llm
-        if model:
-            llm = ChatOllama(
-                model=model,
-                base_url=settings.ollama_base_url,
-                temperature=0.5,
-            )
-
+        # Step 5: LLM呼び出し
         system_prompt = PROPOSAL_SYSTEM_PROMPT.format(
             media_names_list=media_names_list,
             product_context=product_context,
@@ -454,14 +440,19 @@ class ProposalChatService:
         )
 
         messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=query),
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query},
         ]
 
-        response = await llm.ainvoke(messages)
+        result = await self.llm_client.chat(
+            messages=messages,
+            service_name="api-sales",
+            model=model,
+            temperature=0.5,
+        )
 
         return {
-            "proposal": response.content,
+            "proposal": result.get("response", ""),
             "media_names": media_names,
             "search_results": search_results,
             "pricing_info": pricing_info,

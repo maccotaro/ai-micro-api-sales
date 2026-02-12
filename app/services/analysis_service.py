@@ -11,11 +11,10 @@ from typing import Optional, Dict, Any, List
 from uuid import UUID
 
 import httpx
-from langchain_ollama import ChatOllama
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.model_settings_client import get_chat_model
+from app.services.llm_client import LLMClient
 from app.models.meeting import MeetingMinute
 from app.schemas.meeting import MeetingMinuteAnalysis, ExtractedIssue, ExtractedNeed
 from app.services.graph.sales_graph_service import sales_graph_service
@@ -63,10 +62,9 @@ class AnalysisService:
     """Meeting minutes analysis service using LLM."""
 
     def __init__(self):
-        self.llm = ChatOllama(
-            model=get_chat_model(),
-            base_url=settings.ollama_base_url,
-            temperature=0.3,
+        self.llm_client = LLMClient(
+            base_url=settings.llm_service_url,
+            secret=settings.internal_api_secret,
         )
 
     async def analyze_meeting(
@@ -237,10 +235,15 @@ class AnalysisService:
             return None
 
     async def _call_llm(self, prompt: str) -> str:
-        """Call LLM and return response."""
+        """Call LLM via api-llm and return response."""
         try:
-            response = self.llm.invoke(prompt)
-            return response.content
+            result = await self.llm_client.generate(
+                prompt=prompt,
+                task_type="analysis",
+                service_name="api-sales",
+                temperature=0.3,
+            )
+            return result.get("response", "")
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
             raise

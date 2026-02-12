@@ -16,6 +16,7 @@ services:
       - JWT_ISSUER=https://auth.example.com
       - JWT_AUDIENCE=fastapi-api
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - LLM_SERVICE_URL=http://host.docker.internal:8012
       # Model settings via api-admin internal API
       - ADMIN_INTERNAL_URL=http://host.docker.internal:8003
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-me-in-production}
