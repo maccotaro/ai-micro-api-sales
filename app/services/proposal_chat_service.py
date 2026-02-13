@@ -19,6 +19,8 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.db.session import SessionLocal
+
 from app.core.config import settings
 from app.services.llm_client import LLMClient
 
@@ -344,7 +346,13 @@ class ProposalChatService:
             yield f"data: {json.dumps({'type': 'info', 'message': f'{len(search_results)}件の商材情報を検索', 'media_names': media_names})}\n\n"
 
             # Step 3: 料金情報取得
-            pricing_info = self.get_pricing_info(db, media_names, area)
+            # NOTE: StreamingResponse内ではDependsで渡されたdbセッションが
+            # 閉じられている可能性があるため、独自セッションを使用する
+            own_db = SessionLocal()
+            try:
+                pricing_info = self.get_pricing_info(own_db, media_names, area)
+            finally:
+                own_db.close()
 
             yield f"data: {json.dumps({'type': 'info', 'message': f'{len(pricing_info)}件の料金情報を取得', 'status': 'generating'})}\n\n"
 
