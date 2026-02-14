@@ -174,12 +174,19 @@ class ProposalChatService:
                 logger.error(f"Hybrid search failed: {e}")
                 return []
 
-    def extract_media_names(self, search_results: List[Dict[str, Any]]) -> List[str]:
+    def extract_media_names(
+        self, search_results: List[Dict[str, Any]], db: Optional[Session] = None
+    ) -> List[str]:
         """
         検索結果からmedia_nameを抽出（重複排除）。
 
+        metadataから直接抽出できない場合（V2パイプライン等）は、
+        media_pricingテーブルの全媒体名と検索結果のコンテンツを照合して
+        フォールバック抽出を行う。
+
         Args:
             search_results: RAG検索結果
+            db: データベースセッション（フォールバック用）
 
         Returns:
             List[str]: 一意のmedia_name一覧
@@ -191,6 +198,35 @@ class ProposalChatService:
             if media_name:
                 media_names.add(media_name)
                 logger.debug(f"Found media_name: {media_name}")
+
+        if media_names:
+            return list(media_names)
+
+        # フォールバック: metadataにmedia_nameがない場合、
+        # 検索結果のコンテンツからmedia_pricing上の媒体名を照合
+        if not search_results or not db:
+            return []
+
+        try:
+            result = db.execute(
+                text("SELECT DISTINCT media_name FROM media_pricing")
+            )
+            all_media_names = [row[0] for row in result.fetchall() if row[0]]
+        except Exception as e:
+            logger.warning(f"Failed to fetch media_names from media_pricing: {e}")
+            return []
+
+        if not all_media_names:
+            return []
+
+        # 検索結果のコンテンツを結合して媒体名を検索
+        combined_content = " ".join(
+            (r.get("content") or "") for r in search_results
+        )
+        for name in all_media_names:
+            if name in combined_content:
+                media_names.add(name)
+                logger.info(f"Fallback: found media_name '{name}' in search content")
 
         return list(media_names)
 
@@ -307,6 +343,7 @@ class ProposalChatService:
         area: Optional[str] = None,
         pipeline_version: Optional[str] = None,
         model: Optional[str] = None,
+        think: Optional[bool] = None,
     ) -> AsyncGenerator[str, None]:
         """
         商材提案をストリーミング生成（9段階ハイブリッド検索使用）。
@@ -340,16 +377,16 @@ class ProposalChatService:
                 yield f"data: {json.dumps({'type': 'info', 'message': '関連する商材が見つかりませんでした'})}\n\n"
 
             # Step 2: media_name抽出
-            media_names = self.extract_media_names(search_results)
-            logger.info(f"Extracted media_names: {media_names}")
-
-            yield f"data: {json.dumps({'type': 'info', 'message': f'{len(search_results)}件の商材情報を検索', 'media_names': media_names})}\n\n"
-
-            # Step 3: 料金情報取得
             # NOTE: StreamingResponse内ではDependsで渡されたdbセッションが
             # 閉じられている可能性があるため、独自セッションを使用する
             own_db = SessionLocal()
             try:
+                media_names = self.extract_media_names(search_results, own_db)
+                logger.info(f"Extracted media_names: {media_names}")
+
+                yield f"data: {json.dumps({'type': 'info', 'message': f'{len(search_results)}件の商材情報を検索', 'media_names': media_names})}\n\n"
+
+                # Step 3: 料金情報取得
                 pricing_info = self.get_pricing_info(own_db, media_names, area)
             finally:
                 own_db.close()
@@ -375,16 +412,24 @@ class ProposalChatService:
                 {"role": "user", "content": query},
             ]
 
+            provider_options = None
+            if think is not None:
+                provider_options = {"think": think}
+
             full_response = ""
-            async for token in self.llm_client.chat_stream(
+            async for chunk in self.llm_client.chat_stream(
                 messages=messages,
                 service_name="api-sales",
                 model=model,
                 temperature=0.5,
+                provider_options=provider_options,
             ):
+                token = chunk.get("token", "")
+                chunk_type = chunk.get("type", "content")
                 if token:
-                    full_response += token
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': token})}\n\n"
+                    if chunk_type == "content":
+                        full_response += token
+                    yield f"data: {json.dumps({'type': chunk_type, 'content': token})}\n\n"
 
             # Send completion event with metadata
             yield f"data: {json.dumps({'type': 'done', 'media_names': media_names, 'total_products': len(search_results), 'total_pricing': sum(len(p) for p in pricing_info.values())})}\n\n"
@@ -403,6 +448,7 @@ class ProposalChatService:
         area: Optional[str] = None,
         pipeline_version: Optional[str] = None,
         model: Optional[str] = None,
+        think: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         商材提案を生成（非ストリーミング、9段階ハイブリッド検索使用）。
@@ -427,8 +473,8 @@ class ProposalChatService:
             pipeline_version=pipeline_version,
         )
 
-        # Step 2: media_name抽出
-        media_names = self.extract_media_names(search_results)
+        # Step 2: media_name抽出（フォールバック付き）
+        media_names = self.extract_media_names(search_results, db)
 
         # Step 3: 料金情報取得
         pricing_info = self.get_pricing_info(db, media_names, area)
@@ -452,11 +498,16 @@ class ProposalChatService:
             {"role": "user", "content": query},
         ]
 
+        provider_options = None
+        if think is not None:
+            provider_options = {"think": think}
+
         result = await self.llm_client.chat(
             messages=messages,
             service_name="api-sales",
             model=model,
             temperature=0.5,
+            provider_options=provider_options,
         )
 
         return {

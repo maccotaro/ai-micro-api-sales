@@ -53,6 +53,10 @@ class ProposalChatRequest(BaseModel):
         None,
         description="使用するチャットモデル名",
     )
+    think: Optional[bool] = Field(
+        None,
+        description="思考モード（extended thinking）を有効にするか",
+    )
 
 
 class ProposalResponse(BaseModel):
@@ -83,7 +87,8 @@ async def stream_proposal_chat(
     **イベントタイプ:**
     - `start`: 処理開始（status: searching）
     - `info`: 処理状況（message, media_names, status）
-    - `chunk`: 提案テキストの断片
+    - `thinking`: 思考プロセスの断片（think=true時のみ）
+    - `content`: 提案テキストの断片
     - `done`: 処理完了（media_names, total_products, total_pricing）
     - `error`: エラー発生
 
@@ -131,6 +136,7 @@ async def stream_proposal_chat(
             area=request.area,
             pipeline_version=request.pipeline,
             model=request.model,
+            think=request.think,
         ),
         media_type="text/event-stream",
         headers={
@@ -180,6 +186,7 @@ async def generate_proposal(
             area=request.area,
             pipeline_version=request.pipeline,
             model=request.model,
+            think=request.think,
         )
 
         return ProposalResponse(

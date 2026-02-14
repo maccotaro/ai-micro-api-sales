@@ -203,11 +203,12 @@ class ChatService:
             # Send conversation_id first
             yield f"data: {json.dumps({'type': 'start', 'conversation_id': str(conversation.id), 'message_id': str(assistant_msg_id)})}\n\n"
 
-            async for token in self.llm_client.chat_stream(
+            async for chunk in self.llm_client.chat_stream(
                 messages=messages,
                 service_name="api-sales",
                 temperature=0.5,
             ):
+                token = chunk.get("token", "") if isinstance(chunk, dict) else chunk
                 if token:
                     full_response += token
                     yield f"data: {json.dumps({'type': 'chunk', 'content': token})}\n\n"

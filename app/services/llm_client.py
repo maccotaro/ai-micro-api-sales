@@ -135,8 +135,8 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         provider_options: Optional[dict[str, Any]] = None,
         timeout: Optional[float] = None,
-    ) -> AsyncIterator[str]:
-        """Streaming chat call. Yields token strings from SSE stream."""
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Streaming chat call. Yields dicts with 'token' and 'type' from SSE stream."""
         payload: dict[str, Any] = {
             "service_name": service_name,
             "messages": messages,
@@ -166,7 +166,10 @@ class LLMClient:
                         break
                     token = data.get("token", "")
                     if token:
-                        yield token
+                        yield {
+                            "token": token,
+                            "type": data.get("type", "content"),
+                        }
 
     async def list_models(self) -> list[dict]:
         """Get available models. Returns list of model info dicts."""
