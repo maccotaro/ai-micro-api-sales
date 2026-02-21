@@ -2,7 +2,7 @@
 Security utilities for JWT authentication
 """
 import logging
-from typing import Optional
+from typing import Optional, List, Tuple
 from datetime import datetime
 
 import httpx
@@ -109,6 +109,7 @@ async def get_current_user(
         "user_id": payload.get("sub"),
         "email": payload.get("email"),
         "roles": payload.get("roles", []),
+        "permissions": payload.get("permissions", []),
         "tenant_id": payload.get("tenant_id"),
         "department": payload.get("department"),
         "clearance_level": payload.get("clearance_level", "internal"),
@@ -134,3 +135,42 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
             detail="Admin access required"
         )
     return current_user
+
+
+def require_permission(resource: str, action: str):
+    """Resource x action permission check using JWT permissions array."""
+    def permission_checker(
+        current_user: dict = Depends(get_current_user),
+    ) -> dict:
+        required = f"{resource}:{action}"
+        user_permissions = current_user.get("permissions", [])
+
+        resource_wildcard = f"{resource}:*"
+        global_wildcard = "*:*"
+
+        if (
+            required in user_permissions
+            or resource_wildcard in user_permissions
+            or global_wildcard in user_permissions
+        ):
+            return current_user
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission denied: {required}",
+        )
+    return permission_checker
+
+
+def require_any_permission(permissions: List[Tuple[str, str]]):
+    """Allow access if user has ANY of the listed (resource, action) permissions."""
+    def checker(current_user: dict = Depends(get_current_user)) -> dict:
+        user_perms = set(current_user.get("permissions", []))
+        required = {f"{r}:{a}" for r, a in permissions}
+        if user_perms & required or "*:*" in user_perms:
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied",
+        )
+    return checker
