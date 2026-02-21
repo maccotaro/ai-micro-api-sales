@@ -154,9 +154,12 @@ async def search_similar_success_cases(
     Finds success cases that match the query semantically.
     Can optionally filter by industry and area.
     """
+    tenant_id = UUID(current_user["tenant_id"]) if current_user.get("tenant_id") else None
+
     results = await embedding_service.search_similar_success_cases(
         db=db,
         query=request.query,
+        tenant_id=tenant_id,
         industry=request.industry,
         area=request.area,
         limit=request.limit,
@@ -184,9 +187,12 @@ async def search_similar_sales_talks(
     Useful for finding appropriate responses to customer concerns.
     Can optionally filter by issue type and industry.
     """
+    tenant_id = UUID(current_user["tenant_id"]) if current_user.get("tenant_id") else None
+
     results = await embedding_service.search_similar_sales_talks(
         db=db,
         query=request.query,
+        tenant_id=tenant_id,
         issue_type=request.issue_type,
         industry=request.industry,
         limit=request.limit,

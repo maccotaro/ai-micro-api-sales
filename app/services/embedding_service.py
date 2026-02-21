@@ -220,6 +220,7 @@ class EmbeddingService:
         self,
         db: Session,
         query: str,
+        tenant_id: Optional[UUID] = None,
         industry: Optional[str] = None,
         area: Optional[str] = None,
         limit: int = 5,
@@ -255,6 +256,9 @@ class EmbeddingService:
                 "limit": limit,
             }
 
+            if tenant_id:
+                filters.append("sce.tenant_id = :tenant_id")
+                params["tenant_id"] = str(tenant_id)
             if industry:
                 filters.append("sce.industry = :industry")
                 params["industry"] = industry
@@ -312,6 +316,7 @@ class EmbeddingService:
         self,
         db: Session,
         query: str,
+        tenant_id: Optional[UUID] = None,
         issue_type: Optional[str] = None,
         industry: Optional[str] = None,
         limit: int = 5,
@@ -347,6 +352,9 @@ class EmbeddingService:
                 "limit": limit,
             }
 
+            if tenant_id:
+                filters.append("ste.tenant_id = :tenant_id")
+                params["tenant_id"] = str(tenant_id)
             if issue_type:
                 filters.append("ste.issue_type = :issue_type")
                 params["issue_type"] = issue_type

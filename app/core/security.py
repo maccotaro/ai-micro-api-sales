@@ -116,6 +116,46 @@ async def get_current_user(
     }
 
 
+def is_super_admin(current_user: dict) -> bool:
+    """Check if user has super_admin role (cross-tenant access)."""
+    user_roles = current_user.get("roles", [])
+    return "super_admin" in user_roles
+
+
+def get_user_tenant_id(current_user: dict) -> Optional[str]:
+    """Get tenant_id from current user."""
+    return current_user.get("tenant_id")
+
+
+def check_tenant_access(
+    resource_tenant_id: Optional[str],
+    current_user: dict,
+    allow_none: bool = False
+) -> bool:
+    """
+    Check if user has access to a resource based on tenant_id.
+
+    Args:
+        resource_tenant_id: The tenant_id of the resource
+        current_user: Current user dict from JWT
+        allow_none: If True, allow access when resource has no tenant_id (legacy data)
+
+    Returns:
+        True if access is allowed, False otherwise
+    """
+    if is_super_admin(current_user):
+        return True
+
+    if resource_tenant_id is None:
+        return allow_none
+
+    user_tenant_id = get_user_tenant_id(current_user)
+    if user_tenant_id is None:
+        return False
+
+    return str(resource_tenant_id) == str(user_tenant_id)
+
+
 async def require_sales_access(current_user: dict = Depends(get_current_user)) -> dict:
     """Require user to have sales access (any authenticated user)."""
     if not current_user.get("user_id"):

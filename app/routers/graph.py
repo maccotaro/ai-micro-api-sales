@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.core.security import require_sales_access
+from app.core.security import require_sales_access, get_user_tenant_id
+from app.models.meeting import MeetingMinute
 from app.services.graph.sales_graph_service import sales_graph_service
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,18 @@ async def get_graph_recommendations(
     - Similar meetings with shared problems, needs, or industry
     - Success cases related to the meeting's context
     """
+    # Tenant isolation: verify meeting belongs to user's tenant
+    meeting = db.query(MeetingMinute).filter(MeetingMinute.id == minute_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting minute not found")
+
+    user_tenant_id = get_user_tenant_id(current_user)
+    if meeting.tenant_id and user_tenant_id and str(meeting.tenant_id) != user_tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: resource belongs to different tenant"
+        )
+
     # Use default tenant_id if not provided
     tenant_id = UUID(current_user.get("tenant_id")) if current_user.get("tenant_id") else UUID("00000000-0000-0000-0000-000000000000")
 
@@ -152,9 +165,22 @@ async def get_graph_stats(
 @router.delete("/meetings/{minute_id}")
 async def delete_meeting_graph(
     minute_id: UUID,
+    db: Session = Depends(get_db),
     current_user: dict = Depends(require_sales_access),
 ):
     """Delete graph data for a specific meeting."""
+    # Tenant isolation: verify meeting belongs to user's tenant
+    meeting = db.query(MeetingMinute).filter(MeetingMinute.id == minute_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting minute not found")
+
+    user_tenant_id = get_user_tenant_id(current_user)
+    if meeting.tenant_id and user_tenant_id and str(meeting.tenant_id) != user_tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: resource belongs to different tenant"
+        )
+
     tenant_id = UUID(current_user.get("tenant_id")) if current_user.get("tenant_id") else None
 
     if not tenant_id:

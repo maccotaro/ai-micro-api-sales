@@ -2,6 +2,7 @@
 Proposals Router
 
 API endpoints for managing and generating sales proposals.
+Tenant isolation: inherits tenant_id from parent meeting minute.
 """
 import logging
 from typing import Optional
@@ -11,7 +12,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.core.security import require_sales_access
+from app.core.security import (
+    require_sales_access,
+    is_super_admin,
+    get_user_tenant_id,
+    check_tenant_access,
+)
 from app.models.meeting import MeetingMinute, ProposalHistory
 from app.schemas.meeting import (
     ProposalResponse,
@@ -28,6 +34,46 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/proposals", tags=["proposals"])
 
 
+def _build_proposal_tenant_query(db: Session, current_user: dict):
+    """Build a base query with tenant isolation for proposals."""
+    query = db.query(ProposalHistory)
+
+    if is_super_admin(current_user):
+        return query
+
+    user_tenant_id = get_user_tenant_id(current_user)
+    user_id = UUID(current_user["user_id"])
+
+    if user_tenant_id:
+        query = query.filter(ProposalHistory.tenant_id == user_tenant_id)
+    else:
+        query = query.filter(ProposalHistory.created_by == user_id)
+
+    return query
+
+
+def _get_proposal_with_access(
+    db: Session, proposal_id: UUID, current_user: dict
+) -> ProposalHistory:
+    """Get a proposal with tenant access check."""
+    proposal = db.query(ProposalHistory).filter(ProposalHistory.id == proposal_id).first()
+
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    if not check_tenant_access(
+        str(proposal.tenant_id) if proposal.tenant_id else None,
+        current_user,
+        allow_none=False,
+    ):
+        user_id = UUID(current_user["user_id"])
+        if proposal.tenant_id is None and proposal.created_by == user_id:
+            return proposal
+        raise HTTPException(status_code=403, detail="Access denied: resource belongs to different tenant")
+
+    return proposal
+
+
 @router.get("", response_model=ProposalListResponse)
 async def list_proposals(
     page: int = Query(1, ge=1),
@@ -39,12 +85,9 @@ async def list_proposals(
 ):
     """
     List proposals with pagination and filtering.
-
-    - **meeting_minute_id**: Filter by meeting minute
-    - **feedback**: Filter by feedback status (accepted, rejected, modified, pending)
+    Tenant-isolated: returns only current tenant's proposals.
     """
-    user_id = UUID(current_user["user_id"])
-    query = db.query(ProposalHistory).filter(ProposalHistory.created_by == user_id)
+    query = _build_proposal_tenant_query(db, current_user)
 
     if meeting_minute_id:
         query = query.filter(ProposalHistory.meeting_minute_id == meeting_minute_id)
@@ -70,15 +113,7 @@ async def get_proposal(
     current_user: dict = Depends(require_sales_access),
 ):
     """Get a specific proposal by ID."""
-    user_id = UUID(current_user["user_id"])
-    proposal = db.query(ProposalHistory).filter(
-        ProposalHistory.id == proposal_id,
-        ProposalHistory.created_by == user_id,
-    ).first()
-
-    if not proposal:
-        raise HTTPException(status_code=404, detail="Proposal not found")
-
+    proposal = _get_proposal_with_access(db, proposal_id, current_user)
     return ProposalResponse.model_validate(proposal)
 
 
@@ -90,23 +125,23 @@ async def generate_proposal(
 ):
     """
     Generate a new proposal based on a meeting minute.
-
-    The meeting minute must be analyzed first.
-    This endpoint uses AI to:
-    - Match customer needs with products
-    - Generate talking points
-    - Create objection handlers
+    Inherits tenant_id from parent meeting minute.
     """
     user_id = UUID(current_user["user_id"])
 
-    # Get meeting minute
-    minute = db.query(MeetingMinute).filter(
-        MeetingMinute.id == minute_id,
-        MeetingMinute.created_by == user_id,
-    ).first()
-
+    # Get meeting minute with tenant check
+    minute = db.query(MeetingMinute).filter(MeetingMinute.id == minute_id).first()
     if not minute:
         raise HTTPException(status_code=404, detail="Meeting minute not found")
+
+    # Tenant access check on parent meeting minute
+    if not check_tenant_access(
+        str(minute.tenant_id) if minute.tenant_id else None,
+        current_user,
+        allow_none=False,
+    ):
+        if not (minute.tenant_id is None and minute.created_by == user_id):
+            raise HTTPException(status_code=403, detail="Access denied: resource belongs to different tenant")
 
     if not minute.parsed_json:
         raise HTTPException(
@@ -132,7 +167,7 @@ async def generate_proposal(
         analysis_timestamp=minute.updated_at,
     )
 
-    # Generate proposal
+    # Generate proposal - inherits tenant_id from parent minute
     proposal_service = ProposalService()
     proposal = await proposal_service.generate_proposal(
         minute,
@@ -140,6 +175,11 @@ async def generate_proposal(
         db,
         user_id,
     )
+
+    # Set tenant_id from parent meeting minute
+    proposal.tenant_id = minute.tenant_id
+    db.commit()
+    db.refresh(proposal)
 
     logger.info(f"Generated proposal: {proposal.id} for meeting {minute_id}")
     return ProposalResponse.model_validate(proposal)
@@ -152,20 +192,8 @@ async def update_proposal_feedback(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_sales_access),
 ):
-    """
-    Update feedback for a proposal.
-
-    - **feedback**: Status (accepted, rejected, modified, pending)
-    - **feedback_comment**: Optional comment about the feedback
-    """
-    user_id = UUID(current_user["user_id"])
-    proposal = db.query(ProposalHistory).filter(
-        ProposalHistory.id == proposal_id,
-        ProposalHistory.created_by == user_id,
-    ).first()
-
-    if not proposal:
-        raise HTTPException(status_code=404, detail="Proposal not found")
+    """Update feedback for a proposal."""
+    proposal = _get_proposal_with_access(db, proposal_id, current_user)
 
     proposal.feedback = feedback_data.feedback
     proposal.feedback_comment = feedback_data.feedback_comment
@@ -192,14 +220,7 @@ async def delete_proposal(
     current_user: dict = Depends(require_sales_access),
 ):
     """Delete a proposal."""
-    user_id = UUID(current_user["user_id"])
-    proposal = db.query(ProposalHistory).filter(
-        ProposalHistory.id == proposal_id,
-        ProposalHistory.created_by == user_id,
-    ).first()
-
-    if not proposal:
-        raise HTTPException(status_code=404, detail="Proposal not found")
+    proposal = _get_proposal_with_access(db, proposal_id, current_user)
 
     db.delete(proposal)
     db.commit()

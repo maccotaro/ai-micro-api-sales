@@ -3,6 +3,7 @@ Chat Router
 
 API endpoints for AI chat functionality on meeting minutes.
 Provides streaming chat with Server-Sent Events (SSE).
+Tenant isolation: verifies access to parent meeting minute.
 """
 import logging
 from typing import Optional
@@ -13,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.core.security import require_sales_access
+from app.core.security import require_sales_access, check_tenant_access
 from app.models.meeting import MeetingMinute
 from app.schemas.chat import (
     ChatStreamRequest,
@@ -24,6 +25,28 @@ from app.services.chat_service import chat_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/meeting-minutes", tags=["chat"])
+
+
+def _get_minute_for_chat(
+    db: Session, minute_id: UUID, current_user: dict
+) -> MeetingMinute:
+    """Get a meeting minute with tenant access check for chat operations."""
+    minute = db.query(MeetingMinute).filter(MeetingMinute.id == minute_id).first()
+
+    if not minute:
+        raise HTTPException(status_code=404, detail="Meeting minute not found")
+
+    if not check_tenant_access(
+        str(minute.tenant_id) if minute.tenant_id else None,
+        current_user,
+        allow_none=False,
+    ):
+        user_id = UUID(current_user["user_id"])
+        if minute.tenant_id is None and minute.created_by == user_id:
+            return minute
+        raise HTTPException(status_code=403, detail="Access denied: resource belongs to different tenant")
+
+    return minute
 
 
 @router.post("/{minute_id}/chat")
@@ -41,32 +64,9 @@ async def stream_chat(
     - `chunk`: Contains content chunk
     - `done`: Indicates completion with final message_id
     - `error`: Contains error message if something went wrong
-
-    Example usage with JavaScript:
-    ```javascript
-    const response = await fetch('/api/sales/meeting-minutes/{id}/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: 'この顧客の課題は？' })
-    });
-    const reader = response.body.getReader();
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        // Parse SSE data
-    }
-    ```
     """
+    minute = _get_minute_for_chat(db, minute_id, current_user)
     user_id = UUID(current_user["user_id"])
-
-    # Verify access to meeting minute
-    minute = db.query(MeetingMinute).filter(
-        MeetingMinute.id == minute_id,
-        MeetingMinute.created_by == user_id,
-    ).first()
-
-    if not minute:
-        raise HTTPException(status_code=404, detail="Meeting minute not found")
 
     # Check if meeting is analyzed
     if minute.status == "draft":
@@ -98,21 +98,9 @@ async def get_chat_history(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_sales_access),
 ):
-    """
-    Get chat history for a meeting minute.
-
-    Returns all messages in the current conversation for this meeting minute.
-    """
+    """Get chat history for a meeting minute."""
+    minute = _get_minute_for_chat(db, minute_id, current_user)
     user_id = UUID(current_user["user_id"])
-
-    # Verify access to meeting minute
-    minute = db.query(MeetingMinute).filter(
-        MeetingMinute.id == minute_id,
-        MeetingMinute.created_by == user_id,
-    ).first()
-
-    if not minute:
-        raise HTTPException(status_code=404, detail="Meeting minute not found")
 
     history = await chat_service.get_chat_history(
         meeting_minute_id=minute_id,
@@ -129,21 +117,9 @@ async def clear_chat_history(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_sales_access),
 ):
-    """
-    Clear all chat history for a meeting minute.
-
-    This will delete all conversations and messages associated with this meeting minute.
-    """
+    """Clear all chat history for a meeting minute."""
+    minute = _get_minute_for_chat(db, minute_id, current_user)
     user_id = UUID(current_user["user_id"])
-
-    # Verify access to meeting minute
-    minute = db.query(MeetingMinute).filter(
-        MeetingMinute.id == minute_id,
-        MeetingMinute.created_by == user_id,
-    ).first()
-
-    if not minute:
-        raise HTTPException(status_code=404, detail="Meeting minute not found")
 
     deleted = await chat_service.clear_chat_history(
         meeting_minute_id=minute_id,

@@ -26,6 +26,7 @@ class ChatConversation(SalesDBBase):
     )
     title = Column(String(255))
     context_snapshot = Column(JSONB)  # 会話開始時の解析結果スナップショット
+    tenant_id = Column(UUID(as_uuid=True), nullable=True)
     created_by = Column(UUID(as_uuid=True), nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

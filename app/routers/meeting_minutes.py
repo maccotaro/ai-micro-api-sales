@@ -2,6 +2,7 @@
 Meeting Minutes Router
 
 API endpoints for managing and analyzing meeting minutes.
+Tenant isolation: filters by tenant_id from JWT. super_admin sees all tenants.
 """
 import logging
 from typing import Optional
@@ -11,7 +12,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.core.security import require_sales_access
+from app.core.security import (
+    require_sales_access,
+    is_super_admin,
+    get_user_tenant_id,
+    check_tenant_access,
+)
 from app.models.meeting import MeetingMinute
 from app.schemas.meeting import (
     MeetingMinuteCreate,
@@ -28,6 +34,50 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meeting-minutes", tags=["meeting-minutes"])
 
 
+def _build_tenant_query(db: Session, current_user: dict):
+    """Build a base query with tenant isolation for meeting minutes."""
+    query = db.query(MeetingMinute)
+
+    if is_super_admin(current_user):
+        return query
+
+    user_tenant_id = get_user_tenant_id(current_user)
+    user_id = UUID(current_user["user_id"])
+
+    if user_tenant_id:
+        # Tenant user: see own tenant's data
+        query = query.filter(MeetingMinute.tenant_id == user_tenant_id)
+    else:
+        # No tenant: fallback to created_by only
+        query = query.filter(MeetingMinute.created_by == user_id)
+
+    return query
+
+
+def _get_minute_with_access(
+    db: Session, minute_id: UUID, current_user: dict
+) -> MeetingMinute:
+    """Get a meeting minute with tenant access check."""
+    minute = db.query(MeetingMinute).filter(MeetingMinute.id == minute_id).first()
+
+    if not minute:
+        raise HTTPException(status_code=404, detail="Meeting minute not found")
+
+    # Tenant access check
+    if not check_tenant_access(
+        str(minute.tenant_id) if minute.tenant_id else None,
+        current_user,
+        allow_none=False,
+    ):
+        # For legacy data (tenant_id=NULL), allow if created_by matches
+        user_id = UUID(current_user["user_id"])
+        if minute.tenant_id is None and minute.created_by == user_id:
+            return minute
+        raise HTTPException(status_code=403, detail="Access denied: resource belongs to different tenant")
+
+    return minute
+
+
 @router.get("", response_model=MeetingMinuteListResponse)
 async def list_meeting_minutes(
     page: int = Query(1, ge=1),
@@ -41,14 +91,10 @@ async def list_meeting_minutes(
 ):
     """
     List meeting minutes with pagination and filtering.
-
-    - **status**: Filter by status (draft, analyzed, proposed, closed)
-    - **company_name**: Filter by company name (partial match)
-    - **industry**: Filter by industry
-    - **area**: Filter by area
+    Tenant-isolated: returns only current tenant's data.
+    super_admin sees all tenants.
     """
-    user_id = UUID(current_user["user_id"])
-    query = db.query(MeetingMinute).filter(MeetingMinute.created_by == user_id)
+    query = _build_tenant_query(db, current_user)
 
     if status:
         query = query.filter(MeetingMinute.status == status)
@@ -78,15 +124,7 @@ async def get_meeting_minute(
     current_user: dict = Depends(require_sales_access),
 ):
     """Get a specific meeting minute by ID."""
-    user_id = UUID(current_user["user_id"])
-    minute = db.query(MeetingMinute).filter(
-        MeetingMinute.id == minute_id,
-        MeetingMinute.created_by == user_id,
-    ).first()
-
-    if not minute:
-        raise HTTPException(status_code=404, detail="Meeting minute not found")
-
+    minute = _get_minute_with_access(db, minute_id, current_user)
     return MeetingMinuteResponse.model_validate(minute)
 
 
@@ -96,12 +134,14 @@ async def create_meeting_minute(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_sales_access),
 ):
-    """Create a new meeting minute."""
+    """Create a new meeting minute. Sets tenant_id from JWT automatically."""
     user_id = UUID(current_user["user_id"])
+    user_tenant_id = get_user_tenant_id(current_user)
 
     minute = MeetingMinute(
         **data.model_dump(),
         created_by=user_id,
+        tenant_id=user_tenant_id,
         status="draft",
     )
     db.add(minute)
@@ -120,14 +160,7 @@ async def update_meeting_minute(
     current_user: dict = Depends(require_sales_access),
 ):
     """Update a meeting minute."""
-    user_id = UUID(current_user["user_id"])
-    minute = db.query(MeetingMinute).filter(
-        MeetingMinute.id == minute_id,
-        MeetingMinute.created_by == user_id,
-    ).first()
-
-    if not minute:
-        raise HTTPException(status_code=404, detail="Meeting minute not found")
+    minute = _get_minute_with_access(db, minute_id, current_user)
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -147,14 +180,7 @@ async def delete_meeting_minute(
     current_user: dict = Depends(require_sales_access),
 ):
     """Delete a meeting minute and all related proposals."""
-    user_id = UUID(current_user["user_id"])
-    minute = db.query(MeetingMinute).filter(
-        MeetingMinute.id == minute_id,
-        MeetingMinute.created_by == user_id,
-    ).first()
-
-    if not minute:
-        raise HTTPException(status_code=404, detail="Meeting minute not found")
+    minute = _get_minute_with_access(db, minute_id, current_user)
 
     db.delete(minute)
     db.commit()
@@ -182,16 +208,9 @@ async def analyze_meeting_minute(
     Analysis results are also stored in Neo4j graph for recommendations.
     Embeddings are generated and stored for vector similarity search.
     """
+    minute = _get_minute_with_access(db, minute_id, current_user)
     user_id = UUID(current_user["user_id"])
     tenant_id = UUID(current_user.get("tenant_id")) if current_user.get("tenant_id") else None
-
-    minute = db.query(MeetingMinute).filter(
-        MeetingMinute.id == minute_id,
-        MeetingMinute.created_by == user_id,
-    ).first()
-
-    if not minute:
-        raise HTTPException(status_code=404, detail="Meeting minute not found")
 
     if not minute.raw_text:
         raise HTTPException(status_code=400, detail="Meeting minute has no text content")
@@ -233,14 +252,7 @@ async def get_meeting_analysis(
     current_user: dict = Depends(require_sales_access),
 ):
     """Get the existing analysis for a meeting minute."""
-    user_id = UUID(current_user["user_id"])
-    minute = db.query(MeetingMinute).filter(
-        MeetingMinute.id == minute_id,
-        MeetingMinute.created_by == user_id,
-    ).first()
-
-    if not minute:
-        raise HTTPException(status_code=404, detail="Meeting minute not found")
+    minute = _get_minute_with_access(db, minute_id, current_user)
 
     if not minute.parsed_json:
         raise HTTPException(status_code=404, detail="Meeting minute has not been analyzed")
@@ -275,15 +287,11 @@ async def generate_all_embeddings(
     Generate embeddings for all analyzed meeting minutes that don't have embeddings yet.
 
     This is useful for backfilling embeddings for existing data.
-    Only processes meetings owned by the current user.
+    Respects tenant isolation.
     """
     from sqlalchemy import text as sql_text
 
-    user_id = UUID(current_user["user_id"])
-
-    # Find meetings without embeddings
-    query = db.query(MeetingMinute).filter(
-        MeetingMinute.created_by == user_id,
+    query = _build_tenant_query(db, current_user).filter(
         MeetingMinute.raw_text.isnot(None),
         MeetingMinute.status.in_(["analyzed", "proposed", "closed"]),
     )
@@ -300,6 +308,7 @@ async def generate_all_embeddings(
         return {"message": "No meetings to process", "processed": 0, "failed": 0}
 
     embedding_service = await get_embedding_service()
+    user_id = UUID(current_user["user_id"])
 
     processed = 0
     failed = 0

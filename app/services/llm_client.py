@@ -45,11 +45,14 @@ class LLMClient:
         self.timeout = timeout
         self.stream_timeout = stream_timeout
 
-    def _headers(self) -> dict[str, str]:
-        return {
+    def _headers(self, tenant_id: Optional[str] = None) -> dict[str, str]:
+        h = {
             "X-Internal-Secret": self.secret,
             "Content-Type": "application/json",
         }
+        if tenant_id:
+            h["X-Tenant-ID"] = tenant_id
+        return h
 
     # -------------------------------------------------------------------------
     # Async methods (for FastAPI services: api-rag, api-admin, api-sales)
@@ -66,6 +69,7 @@ class LLMClient:
         format: Optional[str] = None,
         provider_options: Optional[dict[str, Any]] = None,
         timeout: Optional[float] = None,
+        tenant_id: Optional[str] = None,
     ) -> dict:
         """Non-streaming generate call. Returns {"response": str, "model": str, "total_tokens": int}."""
         payload: dict[str, Any] = {
@@ -87,7 +91,7 @@ class LLMClient:
         async with httpx.AsyncClient(timeout=timeout or self.timeout) as client:
             resp = await client.post(
                 f"{self.base_url}/llm/generate",
-                headers=self._headers(),
+                headers=self._headers(tenant_id=tenant_id),
                 json=payload,
             )
             resp.raise_for_status()
@@ -102,6 +106,7 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         provider_options: Optional[dict[str, Any]] = None,
         timeout: Optional[float] = None,
+        tenant_id: Optional[str] = None,
     ) -> dict:
         """Non-streaming chat call. Returns {"response": str, "model": str, "total_tokens": int}."""
         payload: dict[str, Any] = {
@@ -120,7 +125,7 @@ class LLMClient:
         async with httpx.AsyncClient(timeout=timeout or self.timeout) as client:
             resp = await client.post(
                 f"{self.base_url}/llm/chat",
-                headers=self._headers(),
+                headers=self._headers(tenant_id=tenant_id),
                 json=payload,
             )
             resp.raise_for_status()
@@ -135,8 +140,9 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         provider_options: Optional[dict[str, Any]] = None,
         timeout: Optional[float] = None,
+        tenant_id: Optional[str] = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Streaming chat call. Yields dicts with 'token' and 'type' from SSE stream."""
+        """Streaming chat call. Yields event dicts with 'token' and 'type' keys from SSE stream."""
         payload: dict[str, Any] = {
             "service_name": service_name,
             "messages": messages,
@@ -154,7 +160,7 @@ class LLMClient:
             async with client.stream(
                 "POST",
                 f"{self.base_url}/llm/chat",
-                headers=self._headers(),
+                headers=self._headers(tenant_id=tenant_id),
                 json=payload,
             ) as resp:
                 resp.raise_for_status()
@@ -196,6 +202,7 @@ class LLMClient:
         format: Optional[str] = None,
         provider_options: Optional[dict[str, Any]] = None,
         timeout: Optional[float] = None,
+        tenant_id: Optional[str] = None,
     ) -> dict:
         """Synchronous generate call for Celery workers. Returns {"response": str, "model": str, "total_tokens": int}."""
         payload: dict[str, Any] = {
@@ -217,7 +224,7 @@ class LLMClient:
         with httpx.Client(timeout=timeout or self.timeout) as client:
             resp = client.post(
                 f"{self.base_url}/llm/generate",
-                headers=self._headers(),
+                headers=self._headers(tenant_id=tenant_id),
                 json=payload,
             )
             resp.raise_for_status()
@@ -232,6 +239,7 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         provider_options: Optional[dict[str, Any]] = None,
         timeout: Optional[float] = None,
+        tenant_id: Optional[str] = None,
     ) -> dict:
         """Synchronous chat call for Celery workers. Returns {"response": str, "model": str, "total_tokens": int}."""
         payload: dict[str, Any] = {
@@ -250,7 +258,7 @@ class LLMClient:
         with httpx.Client(timeout=timeout or self.timeout) as client:
             resp = client.post(
                 f"{self.base_url}/llm/chat",
-                headers=self._headers(),
+                headers=self._headers(tenant_id=tenant_id),
                 json=payload,
             )
             resp.raise_for_status()
