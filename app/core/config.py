@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     admin_internal_url: str = "http://localhost:8003"
     internal_api_secret: str = "change-me-in-production"
 
+    # Audit service
+    audit_service_url: str = "http://host.docker.internal:8014"
+
     # Neo4j Graph Database
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"

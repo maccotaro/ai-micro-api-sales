@@ -41,6 +41,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Permission denial middleware (captures 403 responses for audit)
+from app.middleware.permission_denial_middleware import PermissionDenialMiddleware
+app.add_middleware(PermissionDenialMiddleware)
+
 # Include routers
 app.include_router(health.router)
 app.include_router(meeting_minutes.router, prefix="/api/sales")
