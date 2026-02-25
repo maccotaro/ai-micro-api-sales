@@ -1,18 +1,11 @@
 """
-Proposal Chat Service
-
-商材提案RAGシステムのチャットサービス。
-議事録/顧客要件を入力として、RAG検索→料金取得→提案生成のフローを実行する。
-
-【重要】このサービスはapi-ragの9段階ハイブリッド検索パイプラインを使用します。
-これにより、front-adminと同一の検索ロジック（GraphRAG、BM25、Cross-Encoder等）が
-適用されます。
+Proposal Chat Service - 商材提案RAGチャットサービス。
+媒体ごとにLLM呼び出しを分離し、順次ストリーミングで提案を生成する。
 """
 import logging
 import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional, AsyncGenerator
-from decimal import Decimal
 from uuid import UUID
 
 import httpx
@@ -23,62 +16,17 @@ from app.db.session import SessionLocal
 
 from app.core.config import settings
 from app.services.llm_client import LLMClient
+from app.services.proposal_prompts import MEDIA_PROPOSAL_PROMPT, SUMMARY_PROPOSAL_PROMPT
+from app.services.product_data_aggregator import (
+    MediaProductData,
+    aggregate_product_data,
+    build_data_summary,
+)
 
 logger = logging.getLogger(__name__)
 
-
-# 商材提案用システムプロンプト
-PROPOSAL_SYSTEM_PROMPT = """あなたは営業支援AIアシスタントです。顧客の要件に基づいて最適な商材を提案してください。
-
-## あなたの役割
-1. 顧客の課題・ニーズを理解する
-2. 適切な商材を推薦する
-3. 【重要】下記の「料金情報」セクションから具体的な金額を必ず提示する
-4. 提案書のドラフトを作成する
-
-## 利用可能な商材名（正式名称）
-{media_names_list}
-
-【重要】商材名は上記の正式名称を必ず使用してください。略称や誤記は使用しないでください。
-
-## 検索された商材情報
-{product_context}
-
-## 料金情報（必ずこの金額を提案に含めること）
-{pricing_context}
-
-## 回答形式
-以下の形式で回答してください：
-
-### 推奨商材
-（商材名と推奨理由）
-
-### 料金プラン
-（**必ず上記「料金情報」セクションの具体的な金額を記載**）
-例：
-- 商品名: ¥XXX,XXX（エリア）
-
-### 提案理由
-（なぜこの商材が顧客に適しているか）
-
-## 指示
-- 顧客の要件に最も適した商材を推薦してください
-- 商材名は「利用可能な商材名」に記載された正式名称を使用してください
-- 【最重要】「料金情報」セクションに記載された具体的な金額（¥で始まる数字）を必ず提案に含めてください
-- 提案理由を明確に説明してください
-- 日本語で回答してください
-- 不明な点がある場合は追加質問してください
-"""
-
-
 class ProposalChatService:
-    """商材提案チャットサービス
-
-    9段階ハイブリッド検索パイプラインを使用して商材検索を実行します。
-    - Stage 0: Graph Query Expansion（GraphRAG）
-    - Stage 1-7: Atlas、Sparse、Dense、RRF、BM25、Cross-Encoder
-    - Stage 8: Graph Context Enrichment
-    """
+    """商材提案チャットサービス（9段階ハイブリッド検索パイプライン使用）"""
 
     def __init__(self):
         self.llm_client = LLMClient(
@@ -99,30 +47,7 @@ class ProposalChatService:
         top_k: int = 10,
         pipeline_version: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        api-ragの9段階ハイブリッド検索パイプラインで商材ドキュメントを検索。
-
-        9段階パイプライン:
-        - Stage 0: Graph Query Expansion（GraphRAG）
-        - Stage 1: Atlas層フィルタリング
-        - Stage 2: メタデータフィルタ構築
-        - Stage 3: Sparse検索（BM25）
-        - Stage 4: Dense検索（ベクトル）
-        - Stage 5: RRFマージ + Graph Boost
-        - Stage 6: BM25 Re-ranker
-        - Stage 7: Cross-Encoder Re-ranker
-        - Stage 8: Graph Context Enrichment
-
-        Args:
-            query: 検索クエリ
-            knowledge_base_id: ナレッジベースID
-            tenant_id: テナントID
-            jwt_token: 認証トークン
-            top_k: 取得件数
-
-        Returns:
-            List[Dict]: 検索結果（content, metadata, score, graph_context等）
-        """
+        """api-ragの9段階ハイブリッド検索パイプラインで商材ドキュメントを検索。"""
         search_url = f"{self.rag_service_url}/api/rag/search/hybrid"
 
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -177,20 +102,7 @@ class ProposalChatService:
     def extract_media_names(
         self, search_results: List[Dict[str, Any]], db: Optional[Session] = None
     ) -> List[str]:
-        """
-        検索結果からmedia_nameを抽出（重複排除）。
-
-        metadataから直接抽出できない場合（V2パイプライン等）は、
-        media_pricingテーブルの全媒体名と検索結果のコンテンツを照合して
-        フォールバック抽出を行う。
-
-        Args:
-            search_results: RAG検索結果
-            db: データベースセッション（フォールバック用）
-
-        Returns:
-            List[str]: 一意のmedia_name一覧
-        """
+        """検索結果からmedia_nameを抽出（重複排除、フォールバック付き）。"""
         media_names = set()
         for result in search_results:
             metadata = result.get("metadata") or {}
@@ -230,77 +142,17 @@ class ProposalChatService:
 
         return list(media_names)
 
-    def get_pricing_info(
-        self,
-        db: Session,
-        media_names: List[str],
-        area: Optional[str] = None,
-    ) -> Dict[str, List[Dict[str, Any]]]:
-        """
-        media_nameに対応する料金情報を取得。
-
-        Args:
-            db: データベースセッション
-            media_names: 媒体名リスト
-            area: オプション。エリアフィルタ
-
-        Returns:
-            Dict[str, List[Dict]]: 媒体名→料金プランリストのマッピング
-        """
-        if not media_names:
-            return {}
-
-        pricing_info = {}
-
-        for media_name in media_names:
-            query = """
-                SELECT media_name, category_large, product_name, price, area,
-                       listing_period, price_type, remarks
-                FROM media_pricing
-                WHERE media_name = :media_name
-            """
-            params = {"media_name": media_name}
-
-            if area:
-                query += " AND area = :area"
-                params["area"] = area
-
-            # 価格の高い順にソートして重要なプランを優先取得
-            query += " ORDER BY price DESC NULLS LAST, category_large, product_name LIMIT 20"
-
-            result = db.execute(text(query), params)
-            rows = result.fetchall()
-
-            plans = []
-            for row in rows:
-                plans.append({
-                    "media_name": row.media_name,
-                    "category": row.category_large,
-                    "product_name": row.product_name,
-                    "price": float(row.price) if row.price else None,
-                    "area": row.area,
-                    "listing_period": row.listing_period,
-                    "price_type": row.price_type,
-                    "remarks": row.remarks,
-                })
-
-            if plans:
-                pricing_info[media_name] = plans
-                logger.info(f"Found {len(plans)} pricing plans for {media_name}")
-
-        return pricing_info
-
     def _build_product_context(self, search_results: List[Dict[str, Any]]) -> str:
         """検索結果から商材コンテキストを構築"""
         if not search_results:
-            return "（関連する商材情報が見つかりませんでした）"
+            return "(関連する商材情報が見つかりませんでした)"
 
         context_parts = []
         for i, result in enumerate(search_results[:5], 1):
             metadata = result.get("metadata") or {}
             filename = metadata.get("filename", metadata.get("original_filename", "不明"))
             media_name = metadata.get("media_name", "未設定")
-            content = result.get("content", "")[:500]  # Limit content length
+            content = result.get("content", "")[:500]
             score = result.get("score", 0)
 
             context_parts.append(
@@ -312,26 +164,95 @@ class ProposalChatService:
 
         return "\n".join(context_parts)
 
-    def _build_pricing_context(self, pricing_info: Dict[str, List[Dict]]) -> str:
-        """料金情報からコンテキストを構築"""
-        if not pricing_info:
-            return "（料金情報が見つかりませんでした）"
+    def _build_product_context_for_media(self, search_results: List[Dict[str, Any]], target_media: str) -> str:
+        """特定媒体の検索結果のみからコンテキスト構築"""
+        filtered = [r for r in search_results if (r.get("metadata") or {}).get("media_name", "") == target_media]
+        if not filtered:
+            return f"({target_media}に関連する商材情報が見つかりませんでした)"
+        return self._build_product_context(filtered)
 
-        context_parts = ["以下は提案時に使用すべき正式な料金です（価格順）：\n"]
-        for media_name, plans in pricing_info.items():
-            context_parts.append(f"【{media_name}】の料金表:")
-            for plan in plans[:15]:  # Show up to 15 plans per media (sorted by price desc)
-                price_str = f"¥{plan['price']:,.0f}" if plan['price'] else "要問合せ"
-                area_str = plan['area'] if plan['area'] else "全国"
-                period_str = f"({plan['listing_period']})" if plan['listing_period'] else ""
-                category_str = f"[{plan['category']}] " if plan.get('category') else ""
+    def _build_single_media_pricing_context(self, data: MediaProductData) -> str:
+        """単一媒体の料金コンテキストを構築"""
+        if data.pricing_source == "db":
+            lines = [f"データベース: {len(data.pricing_plans)}件"]
+            for plan in data.pricing_plans[:15]:
+                price_str = f"¥{plan['price']:,.0f}" if plan.get("price") else "要問合せ"
+                area_str = plan.get("area") or "全国"
+                period_str = f"({plan['listing_period']})" if plan.get("listing_period") else ""
+                cat_str = f"[{plan['category']}] " if plan.get("category") else ""
+                lines.append(f"- {cat_str}{plan['product_name']}: {price_str} / {area_str} {period_str}")
+            return "\n".join(lines)
+        elif data.pricing_source == "kb":
+            return f"※ 参考情報（KBより）\n{data.kb_pricing_context}"
+        else:
+            return "(料金情報なし - 要確認)"
 
-                context_parts.append(
-                    f"  - {category_str}{plan['product_name']}: {price_str} / {area_str} {period_str}"
+    def _build_single_media_publication_context(self, data: MediaProductData) -> str:
+        """単一媒体の掲載実績コンテキストを構築"""
+        if data.publication_source == "db":
+            records = data.publication_records
+            lines = [f"データベース: {len(records)}件"]
+            for i, rec in enumerate(records[:5], 1):
+                job_str = rec.get("job_category_large") or "不明"
+                pref_str = rec.get("prefecture") or "不明"
+                lines.append(
+                    f"事例{i}: {pref_str}/{job_str} "
+                    f"PV:{rec.get('pv_count', 0):,} 応募:{rec.get('application_count', 0):,} "
+                    f"採用:{rec.get('hire_count', 0):,}"
                 )
-            context_parts.append("")  # Add blank line between media
+            if records:
+                total = len(records)
+                avg_app = sum(r.get("application_count", 0) for r in records) / total
+                avg_hire = sum(r.get("hire_count", 0) for r in records) / total
+                lines.append(f"集計: {total}件平均 応募:{avg_app:.1f} 採用:{avg_hire:.1f}")
+            return "\n".join(lines)
+        elif data.publication_source == "kb":
+            return f"※ 参考情報（KBより）\n{data.kb_publication_context}"
+        else:
+            return "(掲載実績なし)"
 
-        return "\n".join(context_parts)
+    async def _stream_single_media_proposal(
+        self,
+        media_name: str,
+        data: MediaProductData,
+        query: str,
+        search_results: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        provider_options: Optional[Dict[str, Any]] = None,
+    ) -> AsyncGenerator[str, None]:
+        """単一媒体の提案をストリーミング生成。最後に media_proposal_text イベントで全文送信。"""
+        # 該当媒体の検索結果のみをコンテキストに使用
+        media_product_context = self._build_product_context_for_media(search_results, media_name)
+        system_prompt = MEDIA_PROPOSAL_PROMPT.format(
+            media_name=media_name,
+            query_context=query,
+            product_context=media_product_context,
+            media_pricing_context=self._build_single_media_pricing_context(data),
+            media_publication_context=self._build_single_media_publication_context(data),
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query},
+        ]
+
+        full_text = ""
+        async for chunk in self.llm_client.chat_stream(
+            messages=messages,
+            service_name="api-sales",
+            model=model,
+            temperature=0.5,
+            provider_options=provider_options,
+        ):
+            token = chunk.get("token", "")
+            chunk_type = chunk.get("type", "content")
+            if token:
+                if chunk_type == "content":
+                    full_text += token
+                yield f"data: {json.dumps({'type': chunk_type, 'content': token})}\n\n"
+
+        # 提案テキスト全体を内部イベントとしてyield（総合提案用）
+        yield f"data: {json.dumps({'type': 'media_proposal_text', 'media_name': media_name, 'text': full_text})}\n\n"
 
     async def stream_proposal(
         self,
@@ -344,21 +265,11 @@ class ProposalChatService:
         pipeline_version: Optional[str] = None,
         model: Optional[str] = None,
         think: Optional[bool] = None,
+        prefecture: Optional[str] = None,
+        job_category: Optional[str] = None,
+        employment_type: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
-        """
-        商材提案をストリーミング生成（9段階ハイブリッド検索使用）。
-
-        Args:
-            query: 顧客要件/議事録テキスト
-            knowledge_base_id: 商材KBのID
-            tenant_id: テナントID
-            jwt_token: 認証トークン
-            db: データベースセッション
-            area: オプション。エリアフィルタ
-
-        Yields:
-            str: SSE形式のチャンク
-        """
+        """商材提案をストリーミング生成（媒体別LLM呼び出し分離版）。"""
         try:
             # Send start event
             yield f"data: {json.dumps({'type': 'start', 'status': 'searching'})}\n\n"
@@ -377,8 +288,6 @@ class ProposalChatService:
                 yield f"data: {json.dumps({'type': 'info', 'message': '関連する商材が見つかりませんでした'})}\n\n"
 
             # Step 2: media_name抽出
-            # NOTE: StreamingResponse内ではDependsで渡されたdbセッションが
-            # 閉じられている可能性があるため、独自セッションを使用する
             own_db = SessionLocal()
             try:
                 media_names = self.extract_media_names(search_results, own_db)
@@ -386,53 +295,91 @@ class ProposalChatService:
 
                 yield f"data: {json.dumps({'type': 'info', 'message': f'{len(search_results)}件の商材情報を検索', 'media_names': media_names})}\n\n"
 
-                # Step 3: 料金情報取得
-                pricing_info = self.get_pricing_info(own_db, media_names, area)
+                # Step 3: 媒体別データ集約（DB料金+DB実績+KBフォールバック）
+                media_data = await aggregate_product_data(
+                    own_db, media_names, knowledge_base_id,
+                    tenant_id, jwt_token, area, prefecture,
+                    job_category, employment_type,
+                )
             finally:
                 own_db.close()
 
-            yield f"data: {json.dumps({'type': 'info', 'message': f'{len(pricing_info)}件の料金情報を取得', 'status': 'generating'})}\n\n"
-
-            # Step 4: コンテキスト構築
-            product_context = self._build_product_context(search_results)
-            pricing_context = self._build_pricing_context(pricing_info)
-
-            # 商材名リストを作成（正式名称をLLMに明示）
-            media_names_list = ", ".join(media_names) if media_names else "（なし）"
-
-            # Step 5: LLM呼び出し
-            system_prompt = PROPOSAL_SYSTEM_PROMPT.format(
-                media_names_list=media_names_list,
-                product_context=product_context,
-                pricing_context=pricing_context,
-            )
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": query},
-            ]
+            # SSE info: 媒体別サマリー送信
+            summary = build_data_summary(media_data)
+            yield f"data: {json.dumps({'type': 'info', 'message': summary, 'status': 'generating'})}\n\n"
 
             provider_options = None
             if think is not None:
                 provider_options = {"think": think}
 
-            full_response = ""
-            async for chunk in self.llm_client.chat_stream(
-                messages=messages,
-                service_name="api-sales",
-                model=model,
-                temperature=0.5,
-                provider_options=provider_options,
-            ):
-                token = chunk.get("token", "")
-                chunk_type = chunk.get("type", "content")
-                if token:
-                    if chunk_type == "content":
-                        full_response += token
-                    yield f"data: {json.dumps({'type': chunk_type, 'content': token})}\n\n"
+            # Step 4: 媒体別LLM呼び出し（順次ストリーミング）
+            media_proposals: Dict[str, str] = {}
+            total_media = len(media_data)
+
+            for idx, (media_name, data) in enumerate(media_data.items(), 1):
+                # 媒体開始イベント送信
+                yield f"data: {json.dumps({'type': 'media_start', 'media_name': media_name, 'index': idx, 'total': total_media})}\n\n"
+
+                # 単一媒体の提案ストリーミング（媒体別にフィルタした検索結果を使用）
+                async for chunk in self._stream_single_media_proposal(
+                    media_name=media_name,
+                    data=data,
+                    query=query,
+                    search_results=search_results,
+                    model=model,
+                    provider_options=provider_options,
+                ):
+                    # media_proposal_text は内部用 → 提案テキスト収集
+                    if '"type": "media_proposal_text"' in chunk:
+                        try:
+                            event_data = json.loads(chunk.replace("data: ", "").strip())
+                            media_proposals[event_data["media_name"]] = event_data["text"]
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+                        continue  # フロントには送信しない
+                    yield chunk
+
+            # Step 6: 総合提案（2媒体以上の場合のみ）
+            if len(media_proposals) >= 2:
+                yield f"data: {json.dumps({'type': 'media_start', 'media_name': '総合比較・推薦', 'index': total_media + 1, 'total': total_media + 1})}\n\n"
+
+                all_media_text = ""
+                for name, proposal_text in media_proposals.items():
+                    all_media_text += f"## {name}\n{proposal_text}\n\n"
+
+                summary_prompt = SUMMARY_PROPOSAL_PROMPT.format(
+                    media_names_list=", ".join(media_proposals.keys()),
+                    all_media_proposals=all_media_text,
+                )
+
+                messages = [
+                    {"role": "system", "content": summary_prompt},
+                    {"role": "user", "content": query},
+                ]
+
+                async for chunk in self.llm_client.chat_stream(
+                    messages=messages,
+                    service_name="api-sales",
+                    model=model,
+                    temperature=0.5,
+                    provider_options=provider_options,
+                ):
+                    token = chunk.get("token", "")
+                    chunk_type = chunk.get("type", "content")
+                    if token:
+                        yield f"data: {json.dumps({'type': chunk_type, 'content': token})}\n\n"
 
             # Send completion event with metadata
-            yield f"data: {json.dumps({'type': 'done', 'media_names': media_names, 'total_products': len(search_results), 'total_pricing': sum(len(p) for p in pricing_info.values())})}\n\n"
+            media_summary = {
+                name: {
+                    "pricing_source": d.pricing_source,
+                    "pricing_count": len(d.pricing_plans),
+                    "publication_source": d.publication_source,
+                    "publication_count": len(d.publication_records),
+                }
+                for name, d in media_data.items()
+            }
+            yield f"data: {json.dumps({'type': 'done', 'media_names': media_names, 'total_products': len(search_results), 'media_summary': media_summary})}\n\n"
 
         except Exception as e:
             logger.error(f"Proposal generation error: {e}")
@@ -449,21 +396,11 @@ class ProposalChatService:
         pipeline_version: Optional[str] = None,
         model: Optional[str] = None,
         think: Optional[bool] = None,
+        prefecture: Optional[str] = None,
+        job_category: Optional[str] = None,
+        employment_type: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        商材提案を生成（非ストリーミング、9段階ハイブリッド検索使用）。
-
-        Args:
-            query: 顧客要件/議事録テキスト
-            knowledge_base_id: 商材KBのID
-            tenant_id: テナントID
-            jwt_token: 認証トークン
-            db: データベースセッション
-            area: オプション。エリアフィルタ
-
-        Returns:
-            Dict: 提案結果（proposal, media_names, search_results, pricing_info）
-        """
+        """商材提案を生成（非ストリーミング、媒体別LLM呼び出し分離版）。"""
         # Step 1: 9段階ハイブリッド検索（GraphRAG含む）
         search_results = await self.search_products(
             query=query,
@@ -476,48 +413,87 @@ class ProposalChatService:
         # Step 2: media_name抽出（フォールバック付き）
         media_names = self.extract_media_names(search_results, db)
 
-        # Step 3: 料金情報取得
-        pricing_info = self.get_pricing_info(db, media_names, area)
-
-        # Step 4: コンテキスト構築
-        product_context = self._build_product_context(search_results)
-        pricing_context = self._build_pricing_context(pricing_info)
-
-        # 商材名リストを作成（正式名称をLLMに明示）
-        media_names_list = ", ".join(media_names) if media_names else "（なし）"
-
-        # Step 5: LLM呼び出し
-        system_prompt = PROPOSAL_SYSTEM_PROMPT.format(
-            media_names_list=media_names_list,
-            product_context=product_context,
-            pricing_context=pricing_context,
+        # Step 3: 媒体別データ集約（DB料金+DB実績+KBフォールバック）
+        media_data = await aggregate_product_data(
+            db, media_names, knowledge_base_id,
+            tenant_id, jwt_token, area, prefecture,
+            job_category, employment_type,
         )
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query},
-        ]
 
         provider_options = None
         if think is not None:
             provider_options = {"think": think}
 
-        result = await self.llm_client.chat(
-            messages=messages,
-            service_name="api-sales",
-            model=model,
-            temperature=0.5,
-            provider_options=provider_options,
-        )
+        # Step 4: 媒体別LLM呼び出し（順次実行）
+        media_proposals: Dict[str, str] = {}
+        for media_name, data in media_data.items():
+            media_product_context = self._build_product_context_for_media(search_results, media_name)
+            system_prompt = MEDIA_PROPOSAL_PROMPT.format(
+                media_name=media_name,
+                query_context=query,
+                product_context=media_product_context,
+                media_pricing_context=self._build_single_media_pricing_context(data),
+                media_publication_context=self._build_single_media_publication_context(data),
+            )
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query},
+            ]
+
+            result = await self.llm_client.chat(
+                messages=messages,
+                service_name="api-sales",
+                model=model,
+                temperature=0.5,
+                provider_options=provider_options,
+            )
+            media_proposals[media_name] = result.get("response", "")
+
+        # Step 6: 総合提案（2媒体以上の場合のみ）
+        combined_proposal = ""
+        for name, proposal_text in media_proposals.items():
+            combined_proposal += f"## {name}\n{proposal_text}\n\n"
+
+        if len(media_proposals) >= 2:
+            all_media_text = ""
+            for name, proposal_text in media_proposals.items():
+                all_media_text += f"## {name}\n{proposal_text}\n\n"
+
+            summary_prompt = SUMMARY_PROPOSAL_PROMPT.format(
+                media_names_list=", ".join(media_proposals.keys()),
+                all_media_proposals=all_media_text,
+            )
+
+            messages = [
+                {"role": "system", "content": summary_prompt},
+                {"role": "user", "content": query},
+            ]
+
+            summary_result = await self.llm_client.chat(
+                messages=messages,
+                service_name="api-sales",
+                model=model,
+                temperature=0.5,
+                provider_options=provider_options,
+            )
+            combined_proposal += f"## 総合比較・推薦\n{summary_result.get('response', '')}\n"
 
         return {
-            "proposal": result.get("response", ""),
+            "proposal": combined_proposal,
             "media_names": media_names,
             "search_results": search_results,
-            "pricing_info": pricing_info,
+            "media_data": {
+                name: {
+                    "pricing_source": d.pricing_source,
+                    "pricing_count": len(d.pricing_plans),
+                    "publication_source": d.publication_source,
+                    "publication_count": len(d.publication_records),
+                }
+                for name, d in media_data.items()
+            },
             "generated_at": datetime.utcnow().isoformat(),
         }
-
 
 # Singleton instance
 proposal_chat_service = ProposalChatService()

@@ -57,6 +57,18 @@ class ProposalChatRequest(BaseModel):
         None,
         description="思考モード（extended thinking）を有効にするか",
     )
+    prefecture: Optional[str] = Field(
+        None,
+        description="都道府県フィルタ（例: 東京都）",
+    )
+    job_category: Optional[str] = Field(
+        None,
+        description="職種大分類フィルタ（例: 飲食、販売）",
+    )
+    employment_type: Optional[str] = Field(
+        None,
+        description="雇用形態フィルタ（例: アルバイト・パート、正社員）",
+    )
 
 
 class ProposalResponse(BaseModel):
@@ -137,6 +149,9 @@ async def stream_proposal_chat(
             pipeline_version=request.pipeline,
             model=request.model,
             think=request.think,
+            prefecture=request.prefecture,
+            job_category=request.job_category,
+            employment_type=request.employment_type,
         ),
         media_type="text/event-stream",
         headers={
@@ -187,6 +202,9 @@ async def generate_proposal(
             pipeline_version=request.pipeline,
             model=request.model,
             think=request.think,
+            prefecture=request.prefecture,
+            job_category=request.job_category,
+            employment_type=request.employment_type,
         )
 
         return ProposalResponse(
