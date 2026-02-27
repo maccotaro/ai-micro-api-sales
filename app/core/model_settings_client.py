@@ -26,6 +26,7 @@ _DEFAULTS: Dict[str, Any] = {
     "vlm_model": "qwen2.5vl:7b",
     "reranker_model": "BAAI/bge-reranker-base",
     "distance_metric": "cosine",
+    "chat_num_ctx": 32768,
 }
 
 
@@ -73,6 +74,11 @@ def _get(key: str) -> Any:
 def get_chat_model() -> str:
     """Get chat/LLM model name."""
     return _get("chat_model")
+
+
+def get_chat_num_ctx() -> int:
+    """Get chat context window size (num_ctx)."""
+    return int(_get("chat_num_ctx"))
 
 
 def get_embedding_model() -> str:

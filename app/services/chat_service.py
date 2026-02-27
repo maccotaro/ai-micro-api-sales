@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.model_settings_client import get_chat_num_ctx
 from app.services.llm_client import LLMClient
 from app.models.meeting import MeetingMinute
 from app.models.chat import ChatConversation, ChatMessage
@@ -207,6 +208,7 @@ class ChatService:
                 messages=messages,
                 service_name="api-sales",
                 temperature=0.5,
+                provider_options={"num_ctx": get_chat_num_ctx()},
             ):
                 token = chunk.get("token", "") if isinstance(chunk, dict) else chunk
                 if token:

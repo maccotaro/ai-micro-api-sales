@@ -8,7 +8,7 @@ import logging
 from typing import Optional, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException
 
 # デフォルトテナントID（tenant_idがない場合に使用）
 DEFAULT_TENANT_ID = UUID("00000000-0000-0000-0000-000000000000")
@@ -87,7 +87,6 @@ class ProposalResponse(BaseModel):
 @router.post("/stream")
 async def stream_proposal_chat(
     request: ProposalChatRequest,
-    http_request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_sales_access),
 ):
@@ -122,12 +121,6 @@ async def stream_proposal_chat(
     }
     ```
     """
-    # Extract JWT token from request
-    auth_header = http_request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Authorization header required")
-
-    jwt_token = auth_header[7:]
     # tenant_idがない場合はデフォルトを使用
     tenant_id_str = current_user.get("tenant_id")
     tenant_id = UUID(tenant_id_str) if tenant_id_str else DEFAULT_TENANT_ID
@@ -143,7 +136,6 @@ async def stream_proposal_chat(
             query=request.query,
             knowledge_base_id=request.knowledge_base_id,
             tenant_id=tenant_id,
-            jwt_token=jwt_token,
             db=db,
             area=request.area,
             pipeline_version=request.pipeline,
@@ -165,7 +157,6 @@ async def stream_proposal_chat(
 @router.post("/generate", response_model=ProposalResponse)
 async def generate_proposal(
     request: ProposalChatRequest,
-    http_request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_sales_access),
 ):
@@ -175,12 +166,6 @@ async def generate_proposal(
     完全な提案文を一度に返す。レスポンス時間は長くなるが、
     結果を一括で取得したい場合に使用。
     """
-    # Extract JWT token from request
-    auth_header = http_request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Authorization header required")
-
-    jwt_token = auth_header[7:]
     # tenant_idがない場合はデフォルトを使用
     tenant_id_str = current_user.get("tenant_id")
     tenant_id = UUID(tenant_id_str) if tenant_id_str else DEFAULT_TENANT_ID
@@ -196,7 +181,6 @@ async def generate_proposal(
             query=request.query,
             knowledge_base_id=request.knowledge_base_id,
             tenant_id=tenant_id,
-            jwt_token=jwt_token,
             db=db,
             area=request.area,
             pipeline_version=request.pipeline,

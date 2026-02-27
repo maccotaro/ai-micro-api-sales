@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 
 from app.core.config import settings
+from app.core.model_settings_client import get_chat_num_ctx
 from app.services.llm_client import LLMClient
 from app.services.proposal_prompts import MEDIA_PROPOSAL_PROMPT, SUMMARY_PROPOSAL_PROMPT
 from app.services.product_data_aggregator import (
@@ -43,12 +44,11 @@ class ProposalChatService:
         query: str,
         knowledge_base_id: UUID,
         tenant_id: UUID,
-        jwt_token: str,
         top_k: int = 10,
         pipeline_version: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """api-ragの9段階ハイブリッド検索パイプラインで商材ドキュメントを検索。"""
-        search_url = f"{self.rag_service_url}/api/rag/search/hybrid"
+        search_url = f"{self.rag_service_url}/internal/search/hybrid"
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             try:
@@ -66,7 +66,7 @@ class ProposalChatService:
                     search_url,
                     json=search_json,
                     headers={
-                        "Authorization": f"Bearer {jwt_token}",
+                        "X-Internal-Secret": settings.internal_api_secret,
                         "Content-Type": "application/json",
                     },
                 )
@@ -259,7 +259,6 @@ class ProposalChatService:
         query: str,
         knowledge_base_id: UUID,
         tenant_id: UUID,
-        jwt_token: str,
         db: Session,
         area: Optional[str] = None,
         pipeline_version: Optional[str] = None,
@@ -279,7 +278,6 @@ class ProposalChatService:
                 query=query,
                 knowledge_base_id=knowledge_base_id,
                 tenant_id=tenant_id,
-                jwt_token=jwt_token,
                 top_k=10,
                 pipeline_version=pipeline_version,
             )
@@ -298,7 +296,7 @@ class ProposalChatService:
                 # Step 3: 媒体別データ集約（DB料金+DB実績+KBフォールバック）
                 media_data = await aggregate_product_data(
                     own_db, media_names, knowledge_base_id,
-                    tenant_id, jwt_token, area, prefecture,
+                    tenant_id, area, prefecture,
                     job_category, employment_type,
                 )
             finally:
@@ -308,9 +306,9 @@ class ProposalChatService:
             summary = build_data_summary(media_data)
             yield f"data: {json.dumps({'type': 'info', 'message': summary, 'status': 'generating'})}\n\n"
 
-            provider_options = None
+            provider_options: Dict[str, Any] = {"num_ctx": get_chat_num_ctx()}
             if think is not None:
-                provider_options = {"think": think}
+                provider_options["think"] = think
 
             # Step 4: 媒体別LLM呼び出し（順次ストリーミング）
             media_proposals: Dict[str, str] = {}
@@ -390,7 +388,6 @@ class ProposalChatService:
         query: str,
         knowledge_base_id: UUID,
         tenant_id: UUID,
-        jwt_token: str,
         db: Session,
         area: Optional[str] = None,
         pipeline_version: Optional[str] = None,
@@ -406,7 +403,6 @@ class ProposalChatService:
             query=query,
             knowledge_base_id=knowledge_base_id,
             tenant_id=tenant_id,
-            jwt_token=jwt_token,
             pipeline_version=pipeline_version,
         )
 
@@ -416,7 +412,7 @@ class ProposalChatService:
         # Step 3: 媒体別データ集約（DB料金+DB実績+KBフォールバック）
         media_data = await aggregate_product_data(
             db, media_names, knowledge_base_id,
-            tenant_id, jwt_token, area, prefecture,
+            tenant_id, area, prefecture,
             job_category, employment_type,
         )
 

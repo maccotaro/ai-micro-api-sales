@@ -91,14 +91,13 @@ async def _kb_fallback_search(
     query: str,
     kb_id: UUID,
     tenant_id: UUID,
-    jwt_token: str,
     top_k: int = 3,
 ) -> str:
-    """api-rag の /api/rag/search にリクエストして KB フォールバック検索。
+    """api-rag の /internal/search/hybrid にリクエストして KB フォールバック検索。
 
     スコア閾値0.3未満はスキップ、結果テキスト結合（500文字/件）。
     """
-    search_url = f"{settings.rag_service_url}/api/rag/search/hybrid"
+    search_url = f"{settings.rag_service_url}/internal/search/hybrid"
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
@@ -112,7 +111,7 @@ async def _kb_fallback_search(
                     "enable_graph": False,
                 },
                 headers={
-                    "Authorization": f"Bearer {jwt_token}",
+                    "X-Internal-Secret": settings.internal_api_secret,
                     "Content-Type": "application/json",
                 },
             )
@@ -146,7 +145,6 @@ async def aggregate_product_data(
     media_names: List[str],
     kb_id: UUID,
     tenant_id: UUID,
-    jwt_token: str,
     area: Optional[str] = None,
     prefecture: Optional[str] = None,
     job_category: Optional[str] = None,
@@ -189,7 +187,7 @@ async def aggregate_product_data(
             fallback_tasks.append(
                 _kb_fallback_search(
                     f"{media_name} 料金 プラン 価格",
-                    kb_id, tenant_id, jwt_token,
+                    kb_id, tenant_id,
                 )
             )
             fallback_keys.append((media_name, "pricing"))
@@ -198,7 +196,7 @@ async def aggregate_product_data(
             fallback_tasks.append(
                 _kb_fallback_search(
                     f"{media_name} 掲載実績 成功事例 効果",
-                    kb_id, tenant_id, jwt_token,
+                    kb_id, tenant_id,
                 )
             )
             fallback_keys.append((media_name, "publication"))

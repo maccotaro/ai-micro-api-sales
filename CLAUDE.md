@@ -97,6 +97,39 @@ ai-micro-api-sales/
 
 ## API エンドポイント
 
+### 提案パイプライン (`/api/sales/proposal-pipeline`) ★新機能
+
+議事録から6段階LLMチェーンで構造化提案書を自動生成する。
+
+| メソッド | パス | 説明 |
+|---------|------|------|
+| POST | `/stream` | SSEストリーミング パイプライン実行 |
+| POST | `/generate` | 非ストリーミング パイプライン実行（JSON応答） |
+| GET | `/health` | パイプラインヘルスチェック |
+| GET | `/runs` | 実行履歴一覧（ページネーション） |
+
+**6段階パイプライン:**
+
+| Stage | 名称 | 処理 |
+|-------|------|------|
+| 0 | コンテキスト収集 | 議事録 + DB + KB検索（非LLM） |
+| 1 | 課題構造化 + BANT-C | LLM: 議事録から課題抽出・構造化 |
+| 2 | 逆算プランニング | LLM + DB: 料金・シミュレーション + 提案プラン |
+| 3 | アクションプラン | LLM: 次回商談までのタスク詳細化 |
+| 4 | 原稿提案 | LLM + KB: キャッチコピー・求人原稿案 |
+| 5 | チェックリスト + まとめ | LLM: BANT-C未充足確認 + 総括 |
+
+**SSEイベント:** `pipeline_start`, `stage_start`, `stage_info`, `stage_chunk`, `stage_complete`, `pipeline_complete`, `result`, `error`
+
+**設定:** テナント別パイプライン設定は api-admin の `GET /internal/proposal-pipeline/config` 経由で取得、Redisキャッシュ TTL 300秒
+
+**ファイル:**
+- `app/services/pipeline_config.py` - 設定取得 + Redisキャッシュ
+- `app/services/pipeline_prompts.py` - Stage 1-5 プロンプトテンプレート
+- `app/services/pipeline_stages.py` - Stage 0-5 実装
+- `app/services/proposal_pipeline_service.py` - オーケストレーター + SSE + 実行ログ
+- `app/routers/proposal_pipeline.py` - ルーター
+
 ### 議事録 (`/api/sales/meeting-minutes`)
 
 | メソッド | パス | 説明 |

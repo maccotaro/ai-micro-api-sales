@@ -107,6 +107,8 @@ class LLMClient:
         provider_options: Optional[dict[str, Any]] = None,
         timeout: Optional[float] = None,
         tenant_id: Optional[str] = None,
+        pipeline_stage: Optional[int] = None,
+        pipeline_run_id: Optional[str] = None,
     ) -> dict:
         """Non-streaming chat call. Returns {"response": str, "model": str, "total_tokens": int}."""
         payload: dict[str, Any] = {
@@ -121,6 +123,10 @@ class LLMClient:
             payload["max_tokens"] = max_tokens
         if provider_options:
             payload["provider_options"] = provider_options
+        if pipeline_stage is not None:
+            payload["pipeline_stage"] = pipeline_stage
+        if pipeline_run_id is not None:
+            payload["pipeline_run_id"] = pipeline_run_id
 
         async with httpx.AsyncClient(timeout=timeout or self.timeout) as client:
             resp = await client.post(

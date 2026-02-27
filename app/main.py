@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.routers import meeting_minutes, proposals, simulation, health, search, graph, chat, pricing, proposal_chat
+from app.routers import meeting_minutes, proposals, simulation, health, search, graph, chat, pricing, proposal_chat, proposal_pipeline
 from app.services.graph import neo4j_client
 
 # Configure logging
@@ -55,6 +55,7 @@ app.include_router(graph.router, prefix="/api/sales")
 app.include_router(chat.router, prefix="/api/sales")
 app.include_router(pricing.router, prefix="/api/sales")
 app.include_router(proposal_chat.router, prefix="/api/sales")
+app.include_router(proposal_pipeline.router, prefix="/api/sales")
 
 
 # Global exception handler

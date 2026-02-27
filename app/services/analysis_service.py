@@ -14,6 +14,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.model_settings_client import get_chat_num_ctx
 from app.services.llm_client import LLMClient
 from app.models.meeting import MeetingMinute
 from app.schemas.meeting import MeetingMinuteAnalysis, ExtractedIssue, ExtractedNeed
@@ -242,6 +243,7 @@ class AnalysisService:
                 task_type="analysis",
                 service_name="api-sales",
                 temperature=0.3,
+                provider_options={"num_ctx": get_chat_num_ctx()},
             )
             return result.get("response", "")
         except Exception as e:

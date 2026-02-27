@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.core.config import settings
+from app.core.model_settings_client import get_chat_num_ctx
 from app.services.llm_client import LLMClient
 from app.models.meeting import MeetingMinute, ProposalHistory
 from app.models.master import Product, Campaign
@@ -241,6 +242,7 @@ class ProposalService:
                 task_type="proposal",
                 service_name="api-sales",
                 temperature=0.5,
+                provider_options={"num_ctx": get_chat_num_ctx()},
             )
             return result.get("response", "")
         except Exception as e:
