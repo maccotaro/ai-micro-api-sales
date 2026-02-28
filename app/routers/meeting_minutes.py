@@ -34,14 +34,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meeting-minutes", tags=["meeting-minutes"])
 
 
+DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000"
+
+
 def _build_tenant_query(db: Session, current_user: dict):
     """Build a base query with tenant isolation for meeting minutes."""
     query = db.query(MeetingMinute)
 
+    user_tenant_id = get_user_tenant_id(current_user)
+
     if is_super_admin(current_user):
+        # super_admin with specific tenant selected: filter by that tenant
+        if user_tenant_id and user_tenant_id != DEFAULT_TENANT_ID:
+            query = query.filter(MeetingMinute.tenant_id == user_tenant_id)
+        # super_admin on default tenant: see all data
         return query
 
-    user_tenant_id = get_user_tenant_id(current_user)
     user_id = UUID(current_user["user_id"])
 
     if user_tenant_id:
@@ -138,8 +146,25 @@ async def create_meeting_minute(
     user_id = UUID(current_user["user_id"])
     user_tenant_id = get_user_tenant_id(current_user)
 
+    dump = data.model_dump()
+
+    # Auto-extract industry/area if not provided by user
+    if dump.get("raw_text") and (not dump.get("industry") or not dump.get("area")):
+        try:
+            service = AnalysisService()
+            extracted = await service.extract_industry_area(
+                raw_text=dump["raw_text"],
+                company_name=dump["company_name"],
+            )
+            if not dump.get("industry") and extracted.get("industry"):
+                dump["industry"] = extracted["industry"]
+            if not dump.get("area") and extracted.get("area"):
+                dump["area"] = extracted["area"]
+        except Exception as e:
+            logger.warning(f"Industry/area extraction failed on create: {e}")
+
     minute = MeetingMinute(
-        **data.model_dump(),
+        **dump,
         created_by=user_id,
         tenant_id=user_tenant_id,
         status="draft",
@@ -163,8 +188,31 @@ async def update_meeting_minute(
     minute = _get_minute_with_access(db, minute_id, current_user)
 
     update_data = data.model_dump(exclude_unset=True)
+    # Track whether user explicitly set industry/area in this request
+    user_set_industry = "industry" in update_data
+    user_set_area = "area" in update_data
+
     for field, value in update_data.items():
         setattr(minute, field, value)
+
+    # Auto-extract industry/area if still empty after update
+    raw_text = minute.raw_text
+    if raw_text and (
+        (not minute.industry and not user_set_industry)
+        or (not minute.area and not user_set_area)
+    ):
+        try:
+            service = AnalysisService()
+            extracted = await service.extract_industry_area(
+                raw_text=raw_text,
+                company_name=minute.company_name,
+            )
+            if not minute.industry and not user_set_industry and extracted.get("industry"):
+                minute.industry = extracted["industry"]
+            if not minute.area and not user_set_area and extracted.get("area"):
+                minute.area = extracted["area"]
+        except Exception as e:
+            logger.warning(f"Industry/area extraction failed on update: {e}")
 
     db.commit()
     db.refresh(minute)

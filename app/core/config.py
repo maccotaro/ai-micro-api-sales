@@ -48,6 +48,17 @@ class Settings(BaseSettings):
     max_meeting_text_length: int = 50000
     max_proposal_products: int = 10
 
+    # MinIO
+    minio_enabled: bool = False
+    minio_endpoint: str = "http://host.docker.internal:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket: str = "documents"
+    minio_presentations_prefix: str = "presentations"
+
+    # Presenton service
+    presenton_base_url: str = "http://host.docker.internal:5000"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

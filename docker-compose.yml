@@ -26,6 +26,12 @@ services:
       - NEO4J_DATABASE=neo4j
       - LOG_LEVEL=INFO
       - CORS_ORIGINS=["http://localhost:3005","http://localhost:3003"]
+      - MINIO_ENABLED=true
+      - MINIO_ENDPOINT=http://host.docker.internal:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET=documents
+      - PRESENTON_BASE_URL=http://host.docker.internal:5000
     env_file:
       - .env
     volumes:

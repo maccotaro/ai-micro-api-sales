@@ -76,6 +76,13 @@ async def startup_event():
     logger.info(f"Ollama URL: {settings.ollama_base_url}")
     logger.info(f"CORS origins: {settings.cors_origins}")
 
+    # Initialize MinIO storage if enabled
+    from app.services.storage_service import get_storage_service
+    storage = get_storage_service()
+    if storage:
+        await storage.ensure_bucket()
+        logger.info("MinIO storage initialized")
+
 
 # Shutdown event
 @app.on_event("shutdown")

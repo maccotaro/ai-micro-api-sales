@@ -1,15 +1,8 @@
-"""Stage 0-5 implementations for the 6-stage proposal pipeline.
-
-Stage 0: Context collection (non-LLM)
-Stage 1: Issue structuring + BANT-C check (LLM)
-Stage 2: Reverse-calculation planning (LLM)
-Stage 3: Action plan generation (LLM)
-Stage 4: Ad copy / draft proposal (LLM)
-Stage 5: Checklist + summary (LLM)
-"""
+"""Stage 0-5 implementations for the 6-stage proposal pipeline."""
 import asyncio
 import json
 import logging
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -18,12 +11,19 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.model_settings_client import get_chat_num_ctx
-from app.db.session import SessionLocal
 from app.models.meeting import MeetingMinute
-from app.models.master import Product, Campaign, SimulationParam, WageData, MediaPricing
 from app.services.llm_client import LLMClient
-from app.services.publication_record_service import get_publication_records
 from app.services.pipeline_config import PipelineConfigData, KBMappingCategory
+from app.services.pipeline_data_loaders import (
+    load_product_data,
+    load_simulation_data,
+    load_wage_data,
+    load_publication_records,
+    load_campaign_data,
+    load_seasonal_data,
+    load_document_links,
+)
+from app.services.pipeline_helpers import parse_json_response, validate_evidence
 from app.services.pipeline_prompts import (
     STAGE1_SYSTEM_PROMPT,
     STAGE2_SYSTEM_PROMPT,
@@ -45,11 +45,7 @@ async def stage0_collect_context(
     config: PipelineConfigData,
     db: Session,
 ) -> dict:
-    """Collect all context needed by subsequent stages.
-
-    Returns dict with: meeting_minute, kb_results, product_data,
-    simulation_data, wage_data.
-    """
+    """Collect all context needed by subsequent stages."""
     # 1. Load meeting minute
     minute = db.query(MeetingMinute).filter(MeetingMinute.id == minute_id).first()
     if not minute:
@@ -66,6 +62,7 @@ async def stage0_collect_context(
         "raw_text": minute.raw_text or "",
         "parsed_json": minute.parsed_json or {},
         "meeting_date": str(minute.meeting_date) if minute.meeting_date else "",
+        "next_action_date": minute.next_action_date.isoformat() if minute.next_action_date else "",
     }
 
     # For super_admin (default tenant), use the minute's tenant_id for KB search
@@ -80,21 +77,20 @@ async def stage0_collect_context(
         kb_categories, meeting_data, search_tenant_id
     )
 
-    # 3. Load product/pricing data from salesdb
-    product_data = _load_product_data(db, meeting_data)
+    # 3. Load DB data (products, simulation, wages, publications, campaigns)
+    product_data = load_product_data(db, meeting_data)
+    simulation_data = load_simulation_data(db, meeting_data)
+    wage_data = load_wage_data(db, meeting_data)
+    product_names = [p["product_name"] for p in product_data if p.get("product_name")]
+    publication_data = load_publication_records(db, product_names, meeting_data)
+    campaign_data = load_campaign_data(db)
 
-    # 4. Load simulation params
-    simulation_data = _load_simulation_data(db, meeting_data)
-
-    # 5. Load wage data
-    wage_data = _load_wage_data(db, meeting_data)
-
-    # 6. Load publication records (前回掲載実績)
-    product_names = [p["name"] for p in product_data if p.get("name")]
-    publication_data = _load_publication_records(db, product_names, meeting_data)
-
-    # 7. Load campaign data
-    campaign_data = _load_campaign_data(db)
+    # 4. Load seasonal trend data
+    current_month = datetime.now().month
+    seasonal_data = load_seasonal_data(
+        db, current_month, meeting_data.get("area", ""), meeting_data.get("industry", "")
+    )
+    document_links = load_document_links(db, meeting_data)
 
     return {
         "meeting": meeting_data,
@@ -104,6 +100,8 @@ async def stage0_collect_context(
         "wage_data": wage_data,
         "publication_data": publication_data,
         "campaign_data": campaign_data,
+        "seasonal_data": seasonal_data,
+        "document_links": document_links,
         "search_tenant_id": search_tenant_id,
     }
 
@@ -118,7 +116,13 @@ async def stage1_issue_structuring(
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
 ) -> dict:
-    """Stage 1: Extract and structure issues with BANT-C analysis."""
+    """Stage 1: Extract and structure issues with BANT-C analysis.
+
+    KB context is intentionally excluded from Stage 1 to prevent
+    the LLM from fabricating issues based on external KB content.
+    Stage 1 must extract issues solely from the meeting text.
+    KB results are still fetched and merged for use in later stages.
+    """
     stage_cfg = config.get_stage(1)
     kb_cats = config.get_kb_categories_for_stage(1)
     search_tid = context.get("search_tenant_id", tenant_id)
@@ -128,10 +132,15 @@ async def stage1_issue_structuring(
     prompt = STAGE1_SYSTEM_PROMPT.format(
         meeting_text=context["meeting"]["raw_text"],
         parsed_json=json.dumps(context["meeting"]["parsed_json"], ensure_ascii=False, indent=2),
-        kb_context=build_kb_context_block(context["kb_results"]),
     )
 
-    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=1, pipeline_run_id=pipeline_run_id)
+    result = await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=1, pipeline_run_id=pipeline_run_id)
+
+    # Post-process: validate evidence fields against actual meeting text
+    raw_text = context["meeting"]["raw_text"]
+    result = validate_evidence(result, raw_text)
+
+    return result
 
 
 async def stage2_reverse_planning(
@@ -153,6 +162,14 @@ async def stage2_reverse_planning(
     sim_data = context["simulation_data"] if stage_cfg.use_simulation is not False else []
     wage = context["wage_data"] if stage_cfg.use_wage_data is not False else []
 
+    # Extract budget info from Stage 1 BANT-C output
+    budget_range = _extract_budget_range(stage1_output)
+
+    # Get next_action_date and seasonal context
+    next_action_date = context["meeting"].get("next_action_date", "")
+    current_month = datetime.now().month
+    seasonal_text = _build_seasonal_text(context.get("seasonal_data", {}), current_month)
+
     prompt = STAGE2_SYSTEM_PROMPT.format(
         stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2),
         kb_context=build_kb_context_block(kb_results),
@@ -161,6 +178,10 @@ async def stage2_reverse_planning(
         wage_data=json.dumps(wage, ensure_ascii=False, indent=2),
         publication_data=json.dumps(context.get("publication_data", []), ensure_ascii=False, indent=2),
         campaign_data=json.dumps(context.get("campaign_data", []), ensure_ascii=False, indent=2),
+        budget_range=budget_range,
+        next_action_date=next_action_date,
+        current_month=str(current_month),
+        seasonal_context=seasonal_text,
     )
 
     return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=2, pipeline_run_id=pipeline_run_id)
@@ -185,6 +206,7 @@ async def stage3_action_plan(
         stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2),
         stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2),
         kb_context=build_kb_context_block(kb_results),
+        company_name=context["meeting"].get("company_name", ""),
     )
 
     return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=3, pipeline_run_id=pipeline_run_id)
@@ -211,12 +233,14 @@ async def stage4_ad_copy(
         stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2),
         kb_context=build_kb_context_block(kb_results),
         catchcopy_count=catchcopy_count,
+        meeting_text=context["meeting"]["raw_text"],
     )
 
     return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=4, pipeline_run_id=pipeline_run_id)
 
 
 async def stage5_checklist_summary(
+    context: dict,
     stage1_output: dict,
     stage2_output: dict,
     stage3_output: dict,
@@ -230,12 +254,15 @@ async def stage5_checklist_summary(
     stage_cfg = config.get_stage(5)
 
     stage4_text = json.dumps(stage4_output, ensure_ascii=False, indent=2) if stage4_output else "（Stage 4はスキップされました）"
+    doc_links = json.dumps(context.get("document_links", []), ensure_ascii=False, indent=2)
 
     prompt = STAGE5_SYSTEM_PROMPT.format(
         stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2),
         stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2),
         stage3_output=json.dumps(stage3_output, ensure_ascii=False, indent=2),
         stage4_output=stage4_text,
+        meeting_text=context["meeting"]["raw_text"],
+        document_links=doc_links,
     )
 
     return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=5, pipeline_run_id=pipeline_run_id)
@@ -273,118 +300,7 @@ async def _call_llm(
     )
 
     response_text = result.get("response", "")
-    return _parse_json_response(response_text)
-
-
-def _parse_json_response(text: str) -> dict:
-    """Parse JSON from LLM response, handling markdown code blocks and truncation."""
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = lines[1:]  # Remove first ```json line
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines)
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        # Try to repair truncated JSON by closing open brackets/braces
-        repaired = _try_repair_truncated_json(text)
-        if repaired is not None:
-            logger.warning("Repaired truncated JSON response successfully")
-            return repaired
-        logger.warning("Failed to parse LLM JSON response, returning as raw text")
-        return {"raw_response": text}
-
-
-def _try_repair_truncated_json(text: str) -> Optional[dict]:
-    """Attempt to repair truncated JSON by closing unclosed brackets/braces."""
-    # Remove trailing incomplete string/value (cut at last complete value)
-    # Strategy: find the last valid comma, colon or bracket, then close remaining
-    stripped = text.rstrip()
-
-    # Remove trailing partial string (e.g. truncated mid-value)
-    # Look for last complete JSON structure point
-    in_string = False
-    escape_next = False
-    stack = []
-    last_valid_pos = 0
-
-    for i, ch in enumerate(stripped):
-        if escape_next:
-            escape_next = False
-            continue
-        if ch == '\\' and in_string:
-            escape_next = True
-            continue
-        if ch == '"':
-            in_string = not in_string
-            if not in_string:
-                last_valid_pos = i
-            continue
-        if in_string:
-            continue
-        if ch in '{[':
-            stack.append(ch)
-            continue
-        if ch in '}]':
-            if stack:
-                stack.pop()
-            last_valid_pos = i
-            continue
-        if ch in ',: \t\n\r':
-            if ch in ',:':
-                last_valid_pos = i
-            continue
-        # digits, true, false, null etc.
-        last_valid_pos = i
-
-    if not stack:
-        return None  # Nothing to repair (or text is valid but parse failed for other reason)
-
-    # If we ended inside a string, truncate at last closed quote
-    if in_string:
-        # Find the last closing quote position
-        last_quote = stripped.rfind('"', 0, len(stripped) - 1)
-        if last_quote > 0:
-            stripped = stripped[:last_quote + 1]
-            # Recompute stack
-            in_string = False
-            escape_next = False
-            stack = []
-            for ch in stripped:
-                if escape_next:
-                    escape_next = False
-                    continue
-                if ch == '\\' and in_string:
-                    escape_next = True
-                    continue
-                if ch == '"':
-                    in_string = not in_string
-                    continue
-                if in_string:
-                    continue
-                if ch in '{[':
-                    stack.append(ch)
-                if ch in '}]':
-                    if stack:
-                        stack.pop()
-        else:
-            return None
-
-    # Remove trailing comma if present
-    stripped = stripped.rstrip().rstrip(',')
-
-    # Close remaining open brackets/braces
-    closers = {'[': ']', '{': '}'}
-    for opener in reversed(stack):
-        stripped += closers.get(opener, '')
-
-    try:
-        return json.loads(stripped)
-    except json.JSONDecodeError:
-        return None
+    return parse_json_response(response_text)
 
 
 async def _search_kbs(
@@ -458,100 +374,26 @@ def _merge_kb_results(base: dict, new: dict) -> None:
             base[key] = chunks
 
 
-def _load_product_data(db: Session, meeting_data: dict) -> list[dict]:
-    """Load relevant product and pricing data from salesdb."""
-    products = db.query(Product).filter(Product.is_active == True).limit(20).all()
-    result = []
-    for p in products:
-        item = {
-            "name": p.name,
-            "category": p.category,
-            "base_price": float(p.base_price) if p.base_price else None,
-            "price_unit": p.price_unit,
-            "description": p.description,
-        }
-        # Load pricing for this product's category
-        pricings = db.query(MediaPricing).filter(
-            MediaPricing.product_name == p.name
-        ).limit(10).all()
-        if pricings:
-            item["pricing"] = [
-                {
-                    "media_name": pr.media_name,
-                    "price": float(pr.price) if pr.price else None,
-                    "listing_period": pr.listing_period,
-                    "area": pr.area,
-                }
-                for pr in pricings
-            ]
-        result.append(item)
-    return result
+def _extract_budget_range(stage1_output: dict) -> str:
+    """Extract budget info from Stage 1 BANT-C output."""
+    for issue in stage1_output.get("issues", []):
+        bant = issue.get("bant_c", {})
+        budget = bant.get("budget", {})
+        est = budget.get("estimated_range")
+        if est and (est.get("min") is not None or est.get("max") is not None):
+            return json.dumps(est, ensure_ascii=False)
+    return "予算情報なし"
 
 
-def _load_simulation_data(db: Session, meeting_data: dict) -> list[dict]:
-    """Load simulation parameters for the meeting's area/industry."""
-    query = db.query(SimulationParam)
-    if meeting_data.get("area"):
-        query = query.filter(SimulationParam.area == meeting_data["area"])
-    if meeting_data.get("industry"):
-        query = query.filter(SimulationParam.industry == meeting_data["industry"])
-    params = query.limit(10).all()
-    return [
-        {
-            "area": p.area,
-            "industry": p.industry,
-            "pv_coefficient": float(p.pv_coefficient) if p.pv_coefficient else None,
-            "apply_rate": float(p.apply_rate) if p.apply_rate else None,
-            "conversion_rate": float(p.conversion_rate) if p.conversion_rate else None,
-        }
-        for p in params
-    ]
-
-
-def _load_wage_data(db: Session, meeting_data: dict) -> list[dict]:
-    """Load wage data for the meeting's area/industry."""
-    query = db.query(WageData)
-    if meeting_data.get("area"):
-        query = query.filter(WageData.area == meeting_data["area"])
-    if meeting_data.get("industry"):
-        query = query.filter(WageData.industry == meeting_data["industry"])
-    wages = query.limit(10).all()
-    return [
-        {
-            "area": w.area,
-            "industry": w.industry,
-            "employment_type": w.employment_type,
-            "min_wage": float(w.min_wage) if w.min_wage else None,
-            "avg_wage": float(w.avg_wage) if w.avg_wage else None,
-        }
-        for w in wages
-    ]
-
-
-def _load_publication_records(db: Session, product_names: list, meeting_data: dict) -> list[dict]:
-    """Load publication records for the given products and area."""
-    area = meeting_data.get("area")
-    return get_publication_records(db, product_names, area=area, limit=10)
-
-
-def _load_campaign_data(db: Session) -> list[dict]:
-    """Load currently active campaigns."""
-    from datetime import date
-    today = date.today()
-    campaigns = db.query(Campaign).filter(
-        Campaign.is_active == True,
-        Campaign.start_date <= today,
-        Campaign.end_date >= today,
-    ).limit(10).all()
-    return [
-        {
-            "name": c.name,
-            "description": c.description,
-            "start_date": str(c.start_date),
-            "end_date": str(c.end_date),
-            "discount_rate": float(c.discount_rate) if c.discount_rate else None,
-            "discount_amount": float(c.discount_amount) if c.discount_amount else None,
-            "conditions": c.conditions or {},
-        }
-        for c in campaigns
-    ]
+def _build_seasonal_text(seasonal_data: dict, current_month: int) -> str:
+    """Build seasonal context text from loaded seasonal data."""
+    if not seasonal_data:
+        return "（季節データなし）"
+    lines = [f"【{current_month}月の採用トレンド】"]
+    lines.append(f"採用強度: {seasonal_data.get('hiring_intensity', '不明')}")
+    lines.append(f"概要: {seasonal_data.get('trend_summary', '')}")
+    factors = seasonal_data.get("key_factors", [])
+    if factors:
+        lines.append(f"要因: {', '.join(factors)}")
+    lines.append(f"アドバイス: {seasonal_data.get('advice', '')}")
+    return "\n".join(lines)

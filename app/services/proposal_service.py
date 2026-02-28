@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.core.model_settings_client import get_chat_num_ctx
 from app.services.llm_client import LLMClient
 from app.models.meeting import MeetingMinute, ProposalHistory
-from app.models.master import Product, Campaign
+from app.models.master import Campaign, MediaPricing
 from app.schemas.meeting import (
     MeetingMinuteAnalysis,
     ProposalContent,
@@ -124,7 +124,7 @@ class ProposalService:
         ]) or "なし"
 
         products_text = "\n".join([
-            f"- {p.name} ({p.category}): {p.description or '説明なし'}"
+            f"- {p.media_name} / {p.product_name}: ¥{p.price:,.0f}" if p.price else f"- {p.media_name} / {p.product_name}: 価格要問合せ"
             for p in products[:10]
         ]) or "商品情報なし"
 
@@ -144,19 +144,13 @@ class ProposalService:
             proposal_data = self._parse_proposal_response(response, products)
 
             # Get applicable campaigns
-            campaigns = self._get_applicable_campaigns(
-                [p.id for p in products],
-                db
-            )
+            campaigns = self._get_applicable_campaigns([], db)
 
             # Create proposal
             proposal = ProposalHistory(
                 meeting_minute_id=meeting.id,
                 proposal_json=proposal_data,
-                recommended_products=[
-                    UUID(p["product_id"]) for p in proposal_data.get("recommended_products", [])
-                    if self._is_valid_uuid(p.get("product_id"))
-                ],
+                recommended_products=[],  # MediaPricing uses int ids, not UUIDs
                 simulation_results={
                     "applicable_campaigns": [
                         {"id": str(c.id), "name": c.name, "discount_rate": float(c.discount_rate) if c.discount_rate else None}
@@ -184,27 +178,27 @@ class ProposalService:
         self,
         analysis: MeetingMinuteAnalysis,
         db: Session,
-    ) -> List[Product]:
-        """Get products matching the analysis."""
-        query = db.query(Product).filter(Product.is_active == True)
+    ) -> list[MediaPricing]:
+        """Get products matching the analysis from media_pricing."""
+        query = db.query(MediaPricing)
 
-        # Filter by industry if available
-        if analysis.industry:
-            # Simple keyword matching in description
-            query = query.filter(
-                Product.description.ilike(f"%{analysis.industry}%")
-            )
+        # Filter by area if available
+        if analysis.area:
+            query = query.filter(MediaPricing.area.in_([analysis.area, "全国"]))
 
-        # Order by sort_order and return top products
-        products = query.order_by(Product.sort_order).limit(settings.max_proposal_products).all()
+        pricings = query.order_by(
+            MediaPricing.media_name,
+            MediaPricing.price.desc().nullslast()
+        ).limit(settings.max_proposal_products).all()
 
-        # If no industry match, get any active products
-        if not products:
-            products = db.query(Product).filter(
-                Product.is_active == True
-            ).order_by(Product.sort_order).limit(settings.max_proposal_products).all()
+        # If no area match, get all
+        if not pricings:
+            pricings = db.query(MediaPricing).order_by(
+                MediaPricing.media_name,
+                MediaPricing.price.desc().nullslast()
+            ).limit(settings.max_proposal_products).all()
 
-        return products
+        return pricings
 
     def _get_applicable_campaigns(
         self,
@@ -252,7 +246,7 @@ class ProposalService:
     def _parse_proposal_response(
         self,
         response: str,
-        products: List[Product],
+        products: list[MediaPricing],
     ) -> Dict[str, Any]:
         """Parse LLM response as JSON."""
         try:
@@ -287,7 +281,7 @@ class ProposalService:
             data = parsed
 
             # Validate and fix product IDs
-            product_map = {p.name: str(p.id) for p in products}
+            product_map = {p.product_name: str(p.id) for p in products}
             for rec in data.get("recommended_products", []):
                 # Try to match product name to ID
                 if rec.get("product_name") in product_map:
@@ -304,8 +298,8 @@ class ProposalService:
                 "recommended_products": [
                     {
                         "product_id": str(p.id),
-                        "product_name": p.name,
-                        "category": p.category,
+                        "product_name": f"{p.media_name} / {p.product_name}",
+                        "category": p.media_name,
                         "reason": "お客様のニーズに合致する可能性があります。",
                         "match_score": 0.5,
                     }

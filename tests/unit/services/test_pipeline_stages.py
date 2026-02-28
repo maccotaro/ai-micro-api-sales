@@ -117,7 +117,7 @@ class TestLoadProductData:
     """Tests for _load_product_data helper."""
 
     def test_returns_product_list(self, mock_db_session):
-        from app.services.pipeline_stages import _load_product_data
+        from app.services.pipeline_data_loaders import load_product_data as _load_product_data
 
         mock_product = MagicMock()
         mock_product.name = "バイトル"
@@ -142,7 +142,7 @@ class TestLoadProductData:
         assert result[0]["base_price"] == 50000.0
 
     def test_returns_empty_when_no_products(self, mock_db_session):
-        from app.services.pipeline_stages import _load_product_data
+        from app.services.pipeline_data_loaders import load_product_data as _load_product_data
 
         mock_query = MagicMock()
         mock_query.filter.return_value.limit.return_value.all.return_value = []
@@ -162,7 +162,7 @@ class TestLoadSimulationData:
     """Tests for _load_simulation_data helper."""
 
     def test_returns_simulation_params(self, mock_db_session):
-        from app.services.pipeline_stages import _load_simulation_data
+        from app.services.pipeline_data_loaders import load_simulation_data as _load_simulation_data
 
         mock_param = MagicMock()
         mock_param.area = "関東"
@@ -191,7 +191,7 @@ class TestLoadWageData:
     """Tests for _load_wage_data helper."""
 
     def test_returns_wage_data(self, mock_db_session):
-        from app.services.pipeline_stages import _load_wage_data
+        from app.services.pipeline_data_loaders import load_wage_data as _load_wage_data
 
         mock_wage = MagicMock()
         mock_wage.area = "関東"
@@ -219,7 +219,7 @@ class TestLoadCampaignData:
     """Tests for _load_campaign_data helper."""
 
     def test_returns_active_campaigns(self, mock_db_session):
-        from app.services.pipeline_stages import _load_campaign_data
+        from app.services.pipeline_data_loaders import load_campaign_data as _load_campaign_data
 
         mock_campaign = MagicMock()
         mock_campaign.name = "春キャンペーン"

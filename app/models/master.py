@@ -14,30 +14,6 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 from app.db.session import SalesDBBase
 
 
-class Product(SalesDBBase):
-    """商品マスタ (Read-only)"""
-    __tablename__ = "products"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    name = Column(String(255), nullable=False, unique=True)
-    category = Column(String(100), nullable=False)
-    base_price = Column(DECIMAL(12, 2))
-    price_unit = Column(String(50))
-    description = Column(Text)
-    document_url = Column(Text)
-    features = Column(JSONB, default=list)
-    is_active = Column(Boolean, nullable=False, default=True)
-    sort_order = Column(Integer, default=0)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
-    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
-
-    __table_args__ = (
-        Index("idx_products_category", "category"),
-        Index("idx_products_is_active", "is_active"),
-        Index("idx_products_name", "name"),
-    )
-
-
 class Campaign(SalesDBBase):
     """キャンペーン情報 (Read-only)"""
     __tablename__ = "campaigns"
@@ -132,4 +108,46 @@ class MediaPricing(SalesDBBase):
         Index("idx_media_pricing_media_name", "media_name"),
         Index("idx_media_pricing_area", "area"),
         Index("idx_media_pricing_product_name", "product_name"),
+    )
+
+
+class SeasonalTrend(SalesDBBase):
+    """月別・地域別・業種別の採用トレンド (Read-only)"""
+    __tablename__ = "seasonal_trends"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    month = Column(Integer, nullable=False)
+    area = Column(String(100), nullable=False, default="全国")
+    industry = Column(String(100), nullable=False, default="全業種")
+    trend_summary = Column(Text)
+    hiring_intensity = Column(String(20))
+    key_factors = Column(JSONB, default=list)
+    advice = Column(Text)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_seasonal_trends_month", "month"),
+        Index("idx_seasonal_trends_area", "area"),
+        Index("idx_seasonal_trends_industry", "industry"),
+    )
+
+
+class DocumentLink(SalesDBBase):
+    """参考資料リンク (Read-only)"""
+    __tablename__ = "document_links"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    name = Column(String(255), nullable=False)
+    url = Column(Text, nullable=False)
+    category = Column(String(100))
+    product_id = Column(UUID(as_uuid=True))
+    description = Column(Text)
+    file_type = Column(String(50))
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    __table_args__ = (
+        Index("idx_document_links_category", "category"),
+        Index("idx_document_links_is_active", "is_active"),
     )

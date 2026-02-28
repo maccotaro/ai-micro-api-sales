@@ -12,7 +12,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from app.models.master import Product, Campaign, SimulationParam, WageData
+from app.models.master import Campaign, SimulationParam, WageData, MediaPricing
 from app.schemas.simulation import (
     SimulationRequest,
     SimulationResult,
@@ -128,14 +128,15 @@ class SimulationService:
         avg_wage = Decimal(wage_data.get("avg_wage", 1200)) if wage_data else Decimal("1200")
 
         # Get products by category if specified
-        query = db.query(Product).filter(Product.is_active == True)
+        query = db.query(MediaPricing)
         if request.product_category:
-            query = query.filter(Product.category == request.product_category)
-
-        products = query.order_by(Product.sort_order).limit(10).all()
+            query = query.filter(MediaPricing.media_name == request.product_category)
+        if request.area:
+            query = query.filter(MediaPricing.area.in_([request.area, "全国"]))
+        products = query.order_by(MediaPricing.media_name, MediaPricing.price.desc().nullslast()).limit(10).all()
 
         # Calculate price ranges
-        prices = [p.base_price for p in products if p.base_price]
+        prices = [p.price for p in products if p.price]
         if prices:
             min_price = min(prices)
             max_price = max(prices)
@@ -155,9 +156,9 @@ class SimulationService:
             recommended_products=[
                 {
                     "id": str(p.id),
-                    "name": p.name,
-                    "category": p.category,
-                    "base_price": float(p.base_price) if p.base_price else None,
+                    "name": f"{p.media_name} / {p.product_name}",
+                    "category": p.media_name,
+                    "base_price": float(p.price) if p.price else None,
                 }
                 for p in products[:5]
             ],
@@ -247,24 +248,26 @@ class SimulationService:
         self,
         product_ids: List[UUID],
         db: Session,
-    ) -> List[Product]:
-        """Get products by IDs."""
+    ) -> list[MediaPricing]:
+        """Get products by media name or all active pricing."""
+        # Since MediaPricing uses int ids, not UUIDs, fall back to returning all
         if not product_ids:
             return []
-
-        return db.query(Product).filter(
-            Product.id.in_(product_ids)
-        ).all()
+        # For backwards compatibility, return all media pricing
+        return db.query(MediaPricing).order_by(
+            MediaPricing.media_name,
+            MediaPricing.price.desc().nullslast()
+        ).limit(20).all()
 
     def _calculate_product_simulation(
         self,
-        product: Product,
+        product: MediaPricing,
         sim_params: Dict[str, Any],
         wage_data: Optional[Dict[str, Any]],
         request: SimulationRequest,
     ) -> ProductSimulation:
         """Calculate simulation for a single product."""
-        base_price = product.base_price or Decimal("0")
+        base_price = product.price or Decimal("0")
 
         # Apply simulation coefficients
         pv_coef = Decimal(str(sim_params.get("pv_coefficient", 1.0)))
@@ -296,9 +299,9 @@ class SimulationService:
                     payback_months = int(estimated_cost / (estimated_savings / 12))
 
         return ProductSimulation(
-            product_id=product.id,
-            product_name=product.name,
-            category=product.category,
+            product_id=product.id,  # int, not UUID
+            product_name=f"{product.media_name} / {product.product_name}",
+            category=product.media_name,
             estimated_cost=estimated_cost,
             monthly_cost=monthly_cost,
             annual_cost=annual_cost,

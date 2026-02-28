@@ -34,14 +34,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/proposals", tags=["proposals"])
 
 
+DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000"
+
+
 def _build_proposal_tenant_query(db: Session, current_user: dict):
     """Build a base query with tenant isolation for proposals."""
     query = db.query(ProposalHistory)
 
+    user_tenant_id = get_user_tenant_id(current_user)
+
     if is_super_admin(current_user):
+        if user_tenant_id and user_tenant_id != DEFAULT_TENANT_ID:
+            query = query.filter(ProposalHistory.tenant_id == user_tenant_id)
         return query
 
-    user_tenant_id = get_user_tenant_id(current_user)
     user_id = UUID(current_user["user_id"])
 
     if user_tenant_id:

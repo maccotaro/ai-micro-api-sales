@@ -9,7 +9,7 @@ from sqlalchemy import (
     TIMESTAMP, ForeignKey, Index, CheckConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 
 from app.db.session import SalesDBBase
 
@@ -32,7 +32,7 @@ class ChatConversation(SalesDBBase):
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    meeting_minute = relationship("MeetingMinute", backref="chat_conversations")
+    meeting_minute = relationship("MeetingMinute", backref=backref("chat_conversations", passive_deletes=True))
     messages = relationship("ChatMessage", back_populates="conversation", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
 
     __table_args__ = (

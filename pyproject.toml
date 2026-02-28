@@ -23,6 +23,7 @@ langchain-community = "^0.3.0"
 langchain-ollama = "^0.2.0"
 openai = "^1.51.0"
 neo4j = "^5.25.0"
+aioboto3 = "^13.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
