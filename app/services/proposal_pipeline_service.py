@@ -104,6 +104,16 @@ class ProposalPipelineService:
                     "content": format_context_summary(context),
                 })
                 yield sse_event("stage_complete", {"stage": 0, "duration_ms": duration})
+                yield sse_event("stage_sections", {
+                    "stage": 0,
+                    "sections": [{
+                        "id": "context",
+                        "title": STAGE_NAMES[0],
+                        "stage": 0,
+                        "content": format_context_summary(context),
+                        "has_data": True,
+                    }],
+                })
 
             if context is None:
                 yield sse_event("error", {"message": "Stage 0 is disabled but required"})
@@ -153,6 +163,13 @@ class ProposalPipelineService:
                         "stage": stage_num,
                         "duration_ms": duration,
                     })
+                    # Emit structured sections for immediate display
+                    stage_secs = self._build_stage_sections(config, stage_num, output)
+                    if stage_secs:
+                        yield sse_event("stage_sections", {
+                            "stage": stage_num,
+                            "sections": stage_secs,
+                        })
                 except Exception as e:
                     duration = int((time.time() - t0) * 1000)
                     logger.error("Stage %d failed: %s", stage_num, e)
@@ -172,6 +189,15 @@ class ProposalPipelineService:
             # Build final sections
             total_duration = int((time.time() - pipeline_start) * 1000)
             sections = self._build_sections(config, outputs)
+            # Prepend Stage 0 context collection summary
+            if context:
+                sections.insert(0, {
+                    "id": "context",
+                    "title": STAGE_NAMES[0],
+                    "stage": 0,
+                    "content": format_context_summary(context),
+                    "has_data": True,
+                })
             status = "completed" if all(
                 sr.get("status") in ("completed", "skipped")
                 for sr in stage_results.values()
@@ -276,6 +302,21 @@ class ProposalPipelineService:
                 pipeline_run_id=run_id_str,
             )
         raise ValueError(f"Unknown stage: {stage_num}")
+
+    def _build_stage_sections(self, config: PipelineConfigData, stage_num: int, output: dict) -> list[dict]:
+        """Build template sections for a single completed stage."""
+        sections = []
+        for sec in config.output_template.sections:
+            if sec.stage == stage_num:
+                content = format_section_content(sec.id, sec.stage, output)
+                sections.append({
+                    "id": sec.id,
+                    "title": sec.title,
+                    "stage": sec.stage,
+                    "content": content,
+                    "has_data": bool(content.strip()),
+                })
+        return sections
 
     def _build_sections(self, config: PipelineConfigData, outputs: dict) -> list[dict]:
         """Build final output sections from stage outputs and template.

@@ -28,27 +28,51 @@ def format_context_summary(context: dict) -> str:
     kb_results = context.get("kb_results", {})
     if kb_results:
         lines.append("### ナレッジベース検索結果")
-        for cat_name, results in kb_results.items():
-            lines.append(f"- **{cat_name}**: {len(results)}件取得")
+        for cat_name, chunks in kb_results.items():
+            lines.append(f"\n**{cat_name}** ({len(chunks)}件)")
+            for i, chunk in enumerate(chunks, 1):
+                # Truncate long chunks for readability
+                text = chunk.strip().replace("\n", " ")
+                if len(text) > 200:
+                    text = text[:200] + "…"
+                lines.append(f"{i}. {text}")
         lines.append("")
 
     products = context.get("product_data", [])
     if products:
         lines.append(f"### 商品データ: {len(products)}件")
-        for p in products[:5]:
-            lines.append(f"- {p.get('name', '')}")
-        if len(products) > 5:
-            lines.append(f"- ...他 {len(products) - 5}件")
+        for p in products:
+            media = p.get("media_name", "")
+            prod = p.get("product_name", "")
+            price = p.get("price")
+            period = p.get("listing_period", "")
+            price_str = f" ¥{price:,.0f}" if price else ""
+            period_str = f" ({period})" if period else ""
+            lines.append(f"- {media} / {prod}{price_str}{period_str}")
         lines.append("")
 
     pub_data = context.get("publication_data", [])
     if pub_data:
         lines.append(f"### 前回掲載実績: {len(pub_data)}件")
+        for rec in pub_data:
+            plan = rec.get("plan_category", "")
+            pref = rec.get("prefecture", "")
+            job = rec.get("job_category_large", "")
+            pv = rec.get("pv_count", 0)
+            app_count = rec.get("application_count", 0)
+            hire = rec.get("hire_count", 0)
+            lines.append(f"- {plan} ({pref}/{job}) PV:{pv:,} 応募:{app_count:,} 採用:{hire:,}")
         lines.append("")
 
     campaigns = context.get("campaign_data", [])
     if campaigns:
         lines.append(f"### キャンペーン情報: {len(campaigns)}件")
+        for c in campaigns:
+            name = c.get("name", "")
+            end = c.get("end_date", "")
+            discount = c.get("discount_rate") or c.get("discount_amount")
+            disc_str = f" ({discount})" if discount else ""
+            lines.append(f"- {name}{disc_str} 〜{end}")
         lines.append("")
 
     sim = context.get("simulation_data", [])

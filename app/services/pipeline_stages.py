@@ -20,8 +20,6 @@ from app.services.pipeline_data_loaders import (
     load_wage_data,
     load_publication_records,
     load_campaign_data,
-    load_seasonal_data,
-    load_document_links,
 )
 from app.services.pipeline_helpers import parse_json_response, validate_evidence
 from app.services.pipeline_prompts import (
@@ -85,13 +83,6 @@ async def stage0_collect_context(
     publication_data = load_publication_records(db, product_names, meeting_data)
     campaign_data = load_campaign_data(db)
 
-    # 4. Load seasonal trend data
-    current_month = datetime.now().month
-    seasonal_data = load_seasonal_data(
-        db, current_month, meeting_data.get("area", ""), meeting_data.get("industry", "")
-    )
-    document_links = load_document_links(db, meeting_data)
-
     return {
         "meeting": meeting_data,
         "kb_results": kb_results,
@@ -100,8 +91,6 @@ async def stage0_collect_context(
         "wage_data": wage_data,
         "publication_data": publication_data,
         "campaign_data": campaign_data,
-        "seasonal_data": seasonal_data,
-        "document_links": document_links,
         "search_tenant_id": search_tenant_id,
     }
 
@@ -165,10 +154,11 @@ async def stage2_reverse_planning(
     # Extract budget info from Stage 1 BANT-C output
     budget_range = _extract_budget_range(stage1_output)
 
-    # Get next_action_date and seasonal context
+    # Get next_action_date and seasonal context from KB results
     next_action_date = context["meeting"].get("next_action_date", "")
     current_month = datetime.now().month
-    seasonal_text = _build_seasonal_text(context.get("seasonal_data", {}), current_month)
+    seasonal_chunks = context.get("kb_results", {}).get("seasonal_knowledge", [])
+    seasonal_text = _build_seasonal_text(seasonal_chunks, current_month)
 
     prompt = STAGE2_SYSTEM_PROMPT.format(
         stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2),
@@ -254,7 +244,8 @@ async def stage5_checklist_summary(
     stage_cfg = config.get_stage(5)
 
     stage4_text = json.dumps(stage4_output, ensure_ascii=False, indent=2) if stage4_output else "（Stage 4はスキップされました）"
-    doc_links = json.dumps(context.get("document_links", []), ensure_ascii=False, indent=2)
+    reference_chunks = context.get("kb_results", {}).get("reference_materials", [])
+    doc_links_text = _build_document_links_text(reference_chunks)
 
     prompt = STAGE5_SYSTEM_PROMPT.format(
         stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2),
@@ -262,7 +253,7 @@ async def stage5_checklist_summary(
         stage3_output=json.dumps(stage3_output, ensure_ascii=False, indent=2),
         stage4_output=stage4_text,
         meeting_text=context["meeting"]["raw_text"],
-        document_links=doc_links,
+        document_links=doc_links_text,
     )
 
     return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=5, pipeline_run_id=pipeline_run_id)
@@ -319,8 +310,9 @@ async def _search_kbs(
         query = cat.search_query_template.format(
             industry=meeting_data.get("industry", ""),
             media_name=meeting_data.get("company_name", ""),
-            issue_category="",
+
             area=meeting_data.get("area", ""),
+            month=datetime.now().month,
         )
 
         chunks = []
@@ -385,15 +377,21 @@ def _extract_budget_range(stage1_output: dict) -> str:
     return "予算情報なし"
 
 
-def _build_seasonal_text(seasonal_data: dict, current_month: int) -> str:
-    """Build seasonal context text from loaded seasonal data."""
-    if not seasonal_data:
+def _build_document_links_text(kb_reference_chunks: list[str]) -> str:
+    """Build reference materials text from KB search results."""
+    if not kb_reference_chunks:
+        return "（参考資料なし）"
+    lines = ["【参考資料（KB検索結果）】"]
+    for i, chunk in enumerate(kb_reference_chunks, 1):
+        lines.append(f"{i}. {chunk.strip()}")
+    return "\n".join(lines)
+
+
+def _build_seasonal_text(kb_seasonal_chunks: list[str], current_month: int) -> str:
+    """Build seasonal context text from KB search results."""
+    if not kb_seasonal_chunks:
         return "（季節データなし）"
-    lines = [f"【{current_month}月の採用トレンド】"]
-    lines.append(f"採用強度: {seasonal_data.get('hiring_intensity', '不明')}")
-    lines.append(f"概要: {seasonal_data.get('trend_summary', '')}")
-    factors = seasonal_data.get("key_factors", [])
-    if factors:
-        lines.append(f"要因: {', '.join(factors)}")
-    lines.append(f"アドバイス: {seasonal_data.get('advice', '')}")
+    lines = [f"【{current_month}月の採用トレンド（KB検索結果）】"]
+    for chunk in kb_seasonal_chunks:
+        lines.append(chunk.strip())
     return "\n".join(lines)

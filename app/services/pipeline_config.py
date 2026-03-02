@@ -34,6 +34,7 @@ class KBMappingCategory(BaseModel):
     used_in_stages: list[int] = Field(default_factory=list)
     search_query_template: str = ""
     max_chunks: int = 10
+    label: Optional[str] = None
 
 
 class OutputSection(BaseModel):
@@ -50,12 +51,30 @@ class OutputTemplate(BaseModel):
     locale: str = "ja"
 
 
+def _default_kb_mapping() -> dict[str, KBMappingCategory]:
+    """Provide default KB mapping categories for new tenants."""
+    return {
+        "seasonal_knowledge": KBMappingCategory(
+            used_in_stages=[0],
+            search_query_template="{month}月 {area} {industry} 採用トレンド 季節",
+            max_chunks=5,
+            label="季節別採用ガイド",
+        ),
+        "reference_materials": KBMappingCategory(
+            used_in_stages=[0],
+            search_query_template="{industry} {area} 参考資料",
+            max_chunks=10,
+            label="参考資料",
+        ),
+    }
+
+
 class PipelineConfigData(BaseModel):
     """Parsed pipeline configuration from api-admin."""
     enabled: bool = True
     pipeline_name: str = "次回商談提案書"
     stage_config: dict[str, StageConfig] = Field(default_factory=dict)
-    kb_mapping: dict[str, KBMappingCategory] = Field(default_factory=dict)
+    kb_mapping: dict[str, KBMappingCategory] = Field(default_factory=_default_kb_mapping)
     output_template: OutputTemplate = Field(default_factory=OutputTemplate)
     is_default: bool = False
 
