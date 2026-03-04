@@ -10,6 +10,7 @@ from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.core.config import settings
 from app.routers import meeting_minutes, proposals, simulation, health, search, graph, chat, pricing, proposal_chat, proposal_pipeline
@@ -44,6 +45,9 @@ app.add_middleware(
 # Permission denial middleware (captures 403 responses for audit)
 from app.middleware.permission_denial_middleware import PermissionDenialMiddleware
 app.add_middleware(PermissionDenialMiddleware)
+
+# Prometheus metrics instrumentation
+Instrumentator().instrument(app).expose(app)
 
 # Include routers
 app.include_router(health.router)
