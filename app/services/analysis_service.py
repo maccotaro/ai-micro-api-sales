@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.model_settings_client import get_chat_num_ctx
-from app.services.llm_client import LLMClient
+from app.services.llm_client import LLMClient, LLMUnavailableError
 from app.models.meeting import MeetingMinute
 from app.schemas.meeting import MeetingMinuteAnalysis, ExtractedIssue, ExtractedNeed
 from app.services.graph.sales_graph_service import sales_graph_service
@@ -170,6 +170,25 @@ class AnalysisService:
             logger.info(f"Analysis completed for meeting: {meeting.id}")
             return analysis
 
+        except LLMUnavailableError:
+            logger.warning(f"LLM unavailable during analysis for meeting {meeting.id}")
+            return MeetingMinuteAnalysis(
+                meeting_minute_id=meeting.id,
+                company_name=meeting.company_name,
+                industry=meeting.industry,
+                area=meeting.area,
+                issues=[],
+                needs=[],
+                keywords=[],
+                summary="生成機能は一時的に利用できません。しばらくしてから再度お試しください。",
+                company_size_estimate=None,
+                decision_maker_present=False,
+                next_actions=[],
+                follow_up_date=meeting.next_action_date,
+                confidence_score=0.0,
+                analysis_timestamp=datetime.utcnow(),
+            )
+
         except Exception as e:
             logger.error(f"Analysis failed for meeting {meeting.id}: {e}")
             raise
@@ -207,7 +226,7 @@ class AnalysisService:
                 db.commit()
                 return meeting.entity_data
 
-            url = f"{settings.admin_service_url}/internal/graph/extract-entities"
+            url = f"{settings.admin_service_url}/internal/v1/graph/extract-entities"
             async with httpx.AsyncClient(timeout=330.0) as client:
                 resp = await client.post(
                     url,

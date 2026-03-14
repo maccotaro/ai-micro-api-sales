@@ -97,7 +97,7 @@ async def _kb_fallback_search(
 
     スコア閾値0.3未満はスキップ、結果テキスト結合（500文字/件）。
     """
-    search_url = f"{settings.rag_service_url}/internal/search/hybrid"
+    search_url = f"{settings.rag_service_url}/internal/v1/search/hybrid"
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:

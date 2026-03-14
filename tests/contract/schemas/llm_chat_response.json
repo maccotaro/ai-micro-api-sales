@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLMChatResponse",
+  "description": "Expected response schema from api-llm POST /llm/chat. Consumer: api-sales.",
+  "type": "object",
+  "required": [
+    "response",
+    "model",
+    "provider"
+  ],
+  "properties": {
+    "response": {
+      "type": "string",
+      "description": "Chat response text"
+    },
+    "model": {
+      "type": "string",
+      "description": "Model name used for chat"
+    },
+    "total_tokens": {
+      "type": ["integer", "null"],
+      "description": "Total tokens consumed"
+    },
+    "provider": {
+      "type": "string",
+      "description": "LLM provider name"
+    },
+    "tool_calls": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "required": ["function"],
+        "properties": {
+          "function": {
+            "type": "object",
+            "required": ["name", "arguments"],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "arguments": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "description": "Tool calls returned by the model"
+    }
+  },
+  "additionalProperties": true
+}

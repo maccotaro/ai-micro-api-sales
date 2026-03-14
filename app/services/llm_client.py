@@ -30,6 +30,11 @@ DEFAULT_TIMEOUT = 120.0
 STREAM_TIMEOUT = 300.0
 
 
+class LLMUnavailableError(Exception):
+    """Raised when the LLM service is temporarily unavailable (connection refused, timeout, etc.)."""
+    pass
+
+
 class LLMClient:
     """Client for the centralized LLM service (api-llm)."""
 
@@ -88,14 +93,19 @@ class LLMClient:
         if provider_options:
             payload["provider_options"] = provider_options
 
-        async with httpx.AsyncClient(timeout=timeout or self.timeout) as client:
-            resp = await client.post(
-                f"{self.base_url}/llm/generate",
-                headers=self._headers(tenant_id=tenant_id),
-                json=payload,
-            )
-            resp.raise_for_status()
-            return resp.json()
+        try:
+            async with httpx.AsyncClient(timeout=timeout or self.timeout) as client:
+                resp = await client.post(
+                    f"{self.base_url}/llm/v1/generate",
+                    headers=self._headers(tenant_id=tenant_id),
+                    json=payload,
+                )
+                resp.raise_for_status()
+                return resp.json()
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            raise LLMUnavailableError(
+                f"LLM service is temporarily unavailable: {e}"
+            ) from e
 
     async def chat(
         self,
@@ -128,14 +138,19 @@ class LLMClient:
         if pipeline_run_id is not None:
             payload["pipeline_run_id"] = pipeline_run_id
 
-        async with httpx.AsyncClient(timeout=timeout or self.timeout) as client:
-            resp = await client.post(
-                f"{self.base_url}/llm/chat",
-                headers=self._headers(tenant_id=tenant_id),
-                json=payload,
-            )
-            resp.raise_for_status()
-            return resp.json()
+        try:
+            async with httpx.AsyncClient(timeout=timeout or self.timeout) as client:
+                resp = await client.post(
+                    f"{self.base_url}/llm/v1/chat",
+                    headers=self._headers(tenant_id=tenant_id),
+                    json=payload,
+                )
+                resp.raise_for_status()
+                return resp.json()
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            raise LLMUnavailableError(
+                f"LLM service is temporarily unavailable: {e}"
+            ) from e
 
     async def chat_stream(
         self,
@@ -162,32 +177,37 @@ class LLMClient:
         if provider_options:
             payload["provider_options"] = provider_options
 
-        async with httpx.AsyncClient(timeout=timeout or self.stream_timeout) as client:
-            async with client.stream(
-                "POST",
-                f"{self.base_url}/llm/chat",
-                headers=self._headers(tenant_id=tenant_id),
-                json=payload,
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    data = json.loads(line[6:])
-                    if data.get("done"):
-                        break
-                    token = data.get("token", "")
-                    if token:
-                        yield {
-                            "token": token,
-                            "type": data.get("type", "content"),
-                        }
+        try:
+            async with httpx.AsyncClient(timeout=timeout or self.stream_timeout) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/llm/v1/chat",
+                    headers=self._headers(tenant_id=tenant_id),
+                    json=payload,
+                ) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        data = json.loads(line[6:])
+                        if data.get("done"):
+                            break
+                        token = data.get("token", "")
+                        if token:
+                            yield {
+                                "token": token,
+                                "type": data.get("type", "content"),
+                            }
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            raise LLMUnavailableError(
+                f"LLM service is temporarily unavailable: {e}"
+            ) from e
 
     async def list_models(self) -> list[dict]:
         """Get available models. Returns list of model info dicts."""
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
-                f"{self.base_url}/llm/models",
+                f"{self.base_url}/llm/v1/models",
                 headers=self._headers(),
             )
             resp.raise_for_status()
@@ -229,7 +249,7 @@ class LLMClient:
 
         with httpx.Client(timeout=timeout or self.timeout) as client:
             resp = client.post(
-                f"{self.base_url}/llm/generate",
+                f"{self.base_url}/llm/v1/generate",
                 headers=self._headers(tenant_id=tenant_id),
                 json=payload,
             )
@@ -263,7 +283,7 @@ class LLMClient:
 
         with httpx.Client(timeout=timeout or self.timeout) as client:
             resp = client.post(
-                f"{self.base_url}/llm/chat",
+                f"{self.base_url}/llm/v1/chat",
                 headers=self._headers(tenant_id=tenant_id),
                 json=payload,
             )

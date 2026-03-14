@@ -32,7 +32,7 @@ _DEFAULTS: Dict[str, Any] = {
 
 def _fetch_from_api() -> Optional[Dict[str, Any]]:
     """Fetch model settings from api-admin internal API."""
-    url = f"{settings.admin_internal_url}/internal/model-settings"
+    url = f"{settings.admin_internal_url}/internal/v1/model-settings"
     try:
         resp = httpx.get(
             url,

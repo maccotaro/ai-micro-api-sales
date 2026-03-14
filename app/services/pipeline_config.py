@@ -126,7 +126,7 @@ async def fetch_pipeline_config(tenant_id: UUID) -> PipelineConfigData:
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
-                f"{admin_url}/internal/proposal-pipeline/config",
+                f"{admin_url}/internal/v1/proposal-pipeline/config",
                 params={"tenant_id": str(tenant_id)},
                 headers={"X-Internal-Secret": settings.internal_api_secret},
             )

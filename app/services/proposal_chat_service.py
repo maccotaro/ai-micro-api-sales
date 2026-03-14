@@ -48,7 +48,7 @@ class ProposalChatService:
         pipeline_version: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """api-ragの9段階ハイブリッド検索パイプラインで商材ドキュメントを検索。"""
-        search_url = f"{self.rag_service_url}/internal/search/hybrid"
+        search_url = f"{self.rag_service_url}/internal/v1/search/hybrid"
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             try:

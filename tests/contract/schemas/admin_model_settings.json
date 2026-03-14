@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AdminModelSettingsResponse",
+  "description": "Expected response schema from api-admin GET /internal/v1/model-settings. Consumer: api-sales.",
+  "type": "object",
+  "required": [
+    "embedding_model",
+    "embedding_dimension",
+    "chat_model",
+    "distance_metric"
+  ],
+  "properties": {
+    "embedding_model": {
+      "type": "string",
+      "description": "Ollama embedding model name (e.g., bge-m3:567m)"
+    },
+    "embedding_dimension": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Embedding vector dimension"
+    },
+    "chat_model": {
+      "type": "string",
+      "description": "Ollama chat/LLM model name"
+    },
+    "tool_model": {
+      "type": "string",
+      "description": "Tool/function-calling LLM model name"
+    },
+    "vlm_enabled": {
+      "type": "boolean",
+      "description": "Whether VLM page summary generation is enabled"
+    },
+    "vlm_model": {
+      "type": ["string", "null"],
+      "description": "Vision-Language model name"
+    },
+    "vlm_num_ctx": {
+      "type": "integer",
+      "description": "VLM context window size"
+    },
+    "chat_num_ctx": {
+      "type": "integer",
+      "description": "Chat model context window size"
+    },
+    "vlm_timeout_seconds": {
+      "type": "integer",
+      "description": "VLM inference timeout in seconds"
+    },
+    "reranker_model": {
+      "type": ["string", "null"],
+      "description": "Cross-Encoder reranker model"
+    },
+    "cross_encoder_enabled": {
+      "type": "boolean",
+      "description": "Whether Cross-Encoder reranker is enabled"
+    },
+    "bm25_reranker_enabled": {
+      "type": "boolean",
+      "description": "Whether BM25 reranker is enabled"
+    },
+    "reranker_batch_size": {
+      "type": "integer",
+      "description": "Batch size for reranker processing"
+    },
+    "distance_metric": {
+      "type": "string",
+      "enum": ["cosine", "euclidean", "dot_product"],
+      "description": "Vector distance metric"
+    },
+    "ocr_engine": {
+      "type": "string",
+      "enum": ["easyocr", "smoldocling", "surya"],
+      "description": "OCR engine for document processing"
+    }
+  },
+  "additionalProperties": true
+}

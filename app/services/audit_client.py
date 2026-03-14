@@ -23,7 +23,7 @@ async def send_audit_event(
     Returns True if recorded successfully, False on failure.
     Never raises - audit failures should not break main operations.
     """
-    url = f"{settings.audit_service_url}/audit/events"
+    url = f"{settings.audit_service_url}/audit/v1/events"
     payload = {
         "event_type": event_type,
         "tenant_id": str(tenant_id) if tenant_id else None,

@@ -320,7 +320,7 @@ async def _search_kbs(
             try:
                 async with httpx.AsyncClient(timeout=15.0) as client:
                     resp = await client.post(
-                        f"{settings.rag_service_url}/internal/search/hybrid",
+                        f"{settings.rag_service_url}/internal/v1/search/hybrid",
                         json={
                             "query": query,
                             "knowledge_base_id": kb_id,

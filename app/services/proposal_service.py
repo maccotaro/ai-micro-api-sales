@@ -16,7 +16,7 @@ from sqlalchemy import and_
 
 from app.core.config import settings
 from app.core.model_settings_client import get_chat_num_ctx
-from app.services.llm_client import LLMClient
+from app.services.llm_client import LLMClient, LLMUnavailableError
 from app.models.meeting import MeetingMinute, ProposalHistory
 from app.models.master import Campaign, MediaPricing
 from app.schemas.meeting import (
@@ -169,6 +169,23 @@ class ProposalService:
 
             logger.info(f"Proposal created: {proposal.id}")
             return proposal
+
+        except LLMUnavailableError:
+            logger.warning(f"LLM unavailable during proposal generation for meeting: {meeting.id}")
+            fallback = ProposalHistory(
+                meeting_minute_id=meeting.id,
+                proposal_json={
+                    "title": "生成機能は一時的に利用できません",
+                    "summary": "生成機能は一時的に利用できません。しばらくしてから再度お試しください。",
+                    "recommended_products": [],
+                    "talking_points": [],
+                    "objection_handlers": {},
+                },
+                recommended_products=[],
+                simulation_results={},
+                created_by=user_id,
+            )
+            return fallback
 
         except Exception as e:
             logger.error(f"Proposal generation failed: {e}")
