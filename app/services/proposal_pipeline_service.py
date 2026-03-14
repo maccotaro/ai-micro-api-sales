@@ -55,6 +55,7 @@ class ProposalPipelineService:
         self.llm_client = LLMClient(
             base_url=settings.llm_service_url,
             secret=settings.internal_api_secret,
+            timeout=300.0,
         )
 
     async def stream_pipeline(
