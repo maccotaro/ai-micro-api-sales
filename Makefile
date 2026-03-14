@@ -66,5 +66,8 @@ lint-fix:
 # 複合コマンド
 # ============================================================
 
-check: lint test-unit
+security-scan:
+	poetry run bandit -r app/ -ll -q
+
+check: lint security-scan test-unit
 	@echo "=== チェック完了 ==="
