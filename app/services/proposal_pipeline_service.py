@@ -1,4 +1,4 @@
-"""Proposal pipeline orchestrator: 6-stage execution with SSE streaming."""
+"""Proposal pipeline orchestrator: 11-stage execution with SSE streaming."""
 import json
 import logging
 import time
@@ -27,6 +27,18 @@ from app.services.pipeline_stages import (
     stage4_ad_copy,
     stage5_checklist_summary,
 )
+from app.services.proposal_stages import (
+    stage6_proposal_context,
+    stage7_industry_target_analysis,
+    stage8_appeal_strategy,
+    stage9_story_structure,
+    stage10_page_generation,
+)
+from app.services.proposal_formatters import (
+    format_stage7 as _format_stage7,
+    format_stage8 as _format_stage8,
+    format_stage9 as _format_stage9,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +57,11 @@ STAGE_NAMES = {
     3: "アクションプラン詳細化",
     4: "原稿提案生成",
     5: "チェックリスト + まとめ",
+    6: "提案コンテキスト収集",
+    7: "業界・ターゲット分析",
+    8: "訴求戦略立案",
+    9: "ストーリー構成",
+    10: "ページ生成",
 }
 
 
@@ -73,11 +90,11 @@ class ProposalPipelineService:
             yield sse_event("error", {"message": "パイプラインが無効です"})
             return
 
-        total_stages = sum(1 for i in range(6) if config.get_stage(i).enabled)
+        total_stages = sum(1 for i in range(11) if config.get_stage(i).enabled)
         yield sse_event("pipeline_start", {
             "pipeline_name": config.pipeline_name,
             "total_stages": total_stages,
-            "enabled_stages": [i for i in range(6) if config.get_stage(i).enabled],
+            "enabled_stages": [i for i in range(11) if config.get_stage(i).enabled],
         })
 
         stage_results = {}
@@ -187,6 +204,20 @@ class ProposalPipelineService:
                     # Continue with partial results
                     break
 
+            # Stage 6-10: Proposal document generation
+            proposal_doc_result = None
+            logger.info("Stage 6-10 check: stage6_enabled=%s, outputs_keys=%s",
+                        config.get_stage(6).enabled, list(outputs.keys()))
+            if config.get_stage(6).enabled and outputs.get(1):
+                async for sse_or_result in self._stream_proposal_stages(
+                    context, outputs, config, tenant_id, user_id,
+                    run_id, minute_id, db, stage_results,
+                ):
+                    if isinstance(sse_or_result, str):
+                        yield sse_or_result
+                    elif isinstance(sse_or_result, dict):
+                        proposal_doc_result = sse_or_result
+
             # Build final sections
             total_duration = int((time.time() - pipeline_start) * 1000)
             sections = self._build_sections(config, outputs)
@@ -215,7 +246,7 @@ class ProposalPipelineService:
                 "total_duration_ms": total_duration,
                 "status": status,
             })
-            yield sse_event("result", {
+            result_data = {
                 "run_id": str(run_id) if run_id else None,
                 "sections": sections,
                 "stage_results": {
@@ -224,7 +255,10 @@ class ProposalPipelineService:
                 },
                 "total_duration_ms": total_duration,
                 "pipeline_name": config.pipeline_name,
-            })
+            }
+            if proposal_doc_result and proposal_doc_result.get("document_id"):
+                result_data["document_id"] = proposal_doc_result["document_id"]
+            yield sse_event("result", result_data)
 
         except Exception as e:
             logger.error("Pipeline execution failed: %s", e, exc_info=True)
@@ -304,6 +338,115 @@ class ProposalPipelineService:
             )
         raise ValueError(f"Unknown stage: {stage_num}")
 
+    async def _stream_proposal_stages(
+        self, context, outputs, config, tenant_id, user_id,
+        run_id, minute_id, db, stage_results,
+    ):
+        """Execute Stage 6-10, yielding SSE events and final dict result."""
+        run_id_str = str(run_id) if run_id else None
+        proposal_stages_map = {
+            6: ("提案コンテキスト収集", None),
+            7: ("業界・ターゲット分析", None),
+            8: ("訴求戦略立案", None),
+            9: ("ストーリー構成", None),
+            10: ("ページ生成", None),
+        }
+
+        try:
+            for sn in range(6, 11):
+                if not config.get_stage(sn).enabled:
+                    stage_results[sn] = {"status": "skipped"}
+                    continue
+                # Check dependencies
+                if sn == 7 and not outputs.get(6):
+                    break
+                if sn == 8 and not outputs.get(7):
+                    break
+                if sn == 9 and (not outputs.get(7) or not outputs.get(8)):
+                    break
+                if sn == 10 and not outputs.get(9):
+                    break
+
+                yield sse_event("stage_start", {"stage": sn, "name": STAGE_NAMES[sn]})
+                t0 = time.time()
+
+                if sn == 6:
+                    out = await stage6_proposal_context(
+                        context, outputs.get(1, {}), config, db, tenant_id,
+                    )
+                elif sn == 7:
+                    out = await stage7_industry_target_analysis(
+                        context, outputs.get(1, {}), outputs[6],
+                        config, self.llm_client, tenant_id, run_id_str,
+                    )
+                elif sn == 8:
+                    out = await stage8_appeal_strategy(
+                        context, outputs.get(1, {}), outputs[6], outputs[7],
+                        config, self.llm_client, tenant_id, run_id_str,
+                    )
+                elif sn == 9:
+                    out = await stage9_story_structure(
+                        outputs.get(1, {}), outputs[7], outputs[8],
+                        config, self.llm_client, tenant_id, run_id_str,
+                    )
+                elif sn == 10:
+                    out = await stage10_page_generation(
+                        context, outputs.get(1, {}), outputs.get(2, {}),
+                        outputs[6],
+                        outputs.get(7, {}), outputs.get(8, {}), outputs[9],
+                        config, self.llm_client, db,
+                        tenant_id, user_id, run_id_str, minute_id,
+                    )
+
+                outputs[sn] = out
+                duration = int((time.time() - t0) * 1000)
+                # Save prompt and output for debugging (Stage 7-9 include _prompt)
+                result_entry = {"status": "completed", "duration_ms": duration}
+                if isinstance(out, dict):
+                    if out.get("_prompt"):
+                        result_entry["prompt"] = out["_prompt"][:5000]
+                    # Save output without _prompt and large internal fields
+                    clean_out = {k: v for k, v in out.items() if not k.startswith("_")}
+                    result_entry["output"] = clean_out
+                stage_results[sn] = result_entry
+                logger.info("Proposal stage %d completed in %dms", sn, duration)
+
+                # Emit stage_chunk with formatted content
+                if sn == 6 and isinstance(out, dict):
+                    from app.services.proposal_formatters import format_stage6
+                    yield sse_event("stage_chunk", {"stage": 6, "content": format_stage6(out)})
+                elif sn == 7 and isinstance(out, dict):
+                    yield sse_event("stage_chunk", {
+                        "stage": 7,
+                        "content": _format_stage7(out),
+                    })
+                elif sn == 8 and isinstance(out, dict):
+                    yield sse_event("stage_chunk", {
+                        "stage": 8,
+                        "content": _format_stage8(out),
+                    })
+                elif sn == 9 and isinstance(out, dict):
+                    yield sse_event("stage_chunk", {
+                        "stage": 9,
+                        "content": _format_stage9(out),
+                    })
+                elif sn == 10 and isinstance(out, dict) and "pages" in out:
+                    for page in out["pages"]:
+                        yield sse_event("stage_chunk", {
+                            "stage": 10,
+                            "content": f"### ページ {page['page_number']}: {page.get('title', '')}\n\n{page['markdown_content']}",
+                            "page_number": page["page_number"],
+                        })
+
+                yield sse_event("stage_complete", {"stage": sn, "duration_ms": duration})
+
+            # Return final result (document_id)
+            if outputs.get(10) and isinstance(outputs[10], dict):
+                yield outputs[10]
+
+        except Exception as e:
+            logger.error("Proposal stages failed: %s", e, exc_info=True)
+
     def _build_stage_sections(self, config: PipelineConfigData, stage_num: int, output: dict) -> list[dict]:
         """Build template sections for a single completed stage."""
         sections = []
@@ -320,12 +463,7 @@ class ProposalPipelineService:
         return sections
 
     def _build_sections(self, config: PipelineConfigData, outputs: dict) -> list[dict]:
-        """Build final output sections from stage outputs and template.
-
-        Uses per-section formatters so that sections sharing a stage
-        (e.g. 'agenda' & 'proposal' both stage 2) receive different content.
-        Only 'proposal' gets JSON (for ShochikubaiComparison); others get markdown.
-        """
+        """Build final output sections from stage outputs and template."""
         sections = []
         for section_def in config.output_template.sections:
             stage = section_def.stage
@@ -345,66 +483,15 @@ class ProposalPipelineService:
             })
         return sections
 
-    async def _create_run(self, tenant_id: UUID, user_id: UUID, minute_id: UUID) -> Optional[UUID]:
-        """Insert pipeline run record into salesdb."""
-        try:
-            own_db = SessionLocal()
-            result = own_db.execute(text("""
-                INSERT INTO proposal_pipeline_runs (tenant_id, user_id, minute_id, status)
-                VALUES (:tenant_id, :user_id, :minute_id, 'running')
-                RETURNING id
-            """), {
-                "tenant_id": str(tenant_id),
-                "user_id": str(user_id),
-                "minute_id": str(minute_id),
-            })
-            own_db.commit()
-            row = result.fetchone()
-            return row[0] if row else None
-        except Exception as e:
-            logger.error("Failed to create pipeline run: %s", e)
-            return None
-        finally:
-            own_db.close()
+    async def _create_run(self, tenant_id, user_id, minute_id):
+        from app.services.pipeline_run_db import create_pipeline_run
+        return await create_pipeline_run(tenant_id, user_id, minute_id)
 
-    async def _update_run(
-        self, run_id: UUID, stage_results: dict,
-        total_duration: int, status: str,
-        error_stage: int = None, error_message: str = None,
-        sections: list[dict] = None,
-    ) -> None:
-        """Update pipeline run record."""
-        try:
-            own_db = SessionLocal()
-            # Remove raw output from stage_results for storage
-            clean_results = {}
-            for k, v in stage_results.items():
-                clean = {kk: vv for kk, vv in v.items() if kk != "output"}
-                clean_results[str(k)] = clean
-
-            own_db.execute(text("""
-                UPDATE proposal_pipeline_runs
-                SET stage_results = :stage_results,
-                    total_duration_ms = :total_duration,
-                    status = :status,
-                    error_stage = :error_stage,
-                    error_message = :error_message,
-                    sections = :sections
-                WHERE id = :run_id
-            """), {
-                "stage_results": json.dumps(clean_results),
-                "total_duration": total_duration,
-                "status": status,
-                "error_stage": error_stage,
-                "error_message": error_message,
-                "sections": json.dumps(sections) if sections is not None else None,
-                "run_id": str(run_id),
-            })
-            own_db.commit()
-        except Exception as e:
-            logger.error("Failed to update pipeline run: %s", e)
-        finally:
-            own_db.close()
+    async def _update_run(self, run_id, stage_results, total_duration, status,
+                          error_stage=None, error_message=None, sections=None):
+        from app.services.pipeline_run_db import update_pipeline_run
+        await update_pipeline_run(run_id, stage_results, total_duration, status,
+                                  error_stage, error_message, sections)
 
 
 # Module-level singleton

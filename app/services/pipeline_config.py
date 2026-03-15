@@ -66,6 +66,24 @@ def _default_kb_mapping() -> dict[str, KBMappingCategory]:
             max_chunks=10,
             label="参考資料",
         ),
+        "proposal_reference": KBMappingCategory(
+            used_in_stages=[6],
+            search_query_template="{industry} {area} 提案書 成功事例 戦略",
+            max_chunks=15,
+            label="提案書リファレンス",
+        ),
+        "target_psychology_end_user": KBMappingCategory(
+            used_in_stages=[7],
+            search_query_template="{industry} エンドユーザー 心理 不安 動機",
+            max_chunks=5,
+            label="エンドユーザー心理",
+        ),
+        "target_psychology_decision_maker": KBMappingCategory(
+            used_in_stages=[7, 8],
+            search_query_template="{industry} 担当者 意思決定 懸念 判断軸",
+            max_chunks=5,
+            label="担当者心理",
+        ),
     }
 
 

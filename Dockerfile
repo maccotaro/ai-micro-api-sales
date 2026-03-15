@@ -2,12 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies + Node.js (for Marp CLI)
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     curl \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Marp CLI globally
+RUN npm install -g @marp-team/marp-cli
 
 # Install Poetry
 RUN pip install poetry
