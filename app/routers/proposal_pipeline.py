@@ -2,14 +2,12 @@
 import logging
 from uuid import UUID
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from app.core.config import settings
 from app.core.security import require_sales_access
 from app.db.session import get_db
 from app.services.storage_service import get_storage_service
@@ -34,14 +32,7 @@ class PipelineRunResponse(BaseModel):
     created_at: str
     error_stage: int | None = None
     error_message: str | None = None
-    presentation_path: str | None = None
-    presentation_format: str | None = None
     minio_object_key: str | None = None
-
-
-class PresentationLinkRequest(BaseModel):
-    presentation_path: str = Field(..., description="File path of the generated presentation")
-    presentation_format: str = Field(..., pattern=r"^(pptx|pdf)$", description="pptx or pdf")
 
 
 def _extract_ids(current_user: dict) -> tuple[UUID, UUID]:
@@ -59,7 +50,7 @@ async def stream_pipeline(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_sales_access),
 ):
-    """Execute the 6-stage proposal pipeline with SSE streaming."""
+    """Execute the proposal pipeline with SSE streaming."""
     from app.services.proposal_pipeline_service import proposal_pipeline_service
 
     tenant_id, user_id = _extract_ids(current_user)
@@ -86,7 +77,7 @@ async def generate_pipeline(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_sales_access),
 ):
-    """Execute the 6-stage proposal pipeline and return complete JSON."""
+    """Execute the proposal pipeline and return complete JSON."""
     from app.services.proposal_pipeline_service import proposal_pipeline_service
 
     tenant_id, user_id = _extract_ids(current_user)
@@ -150,7 +141,6 @@ async def list_pipeline_runs(
     rows = db.execute(text(f"""
         SELECT id, minute_id, status, total_duration_ms,
                created_at, error_stage, error_message,
-               presentation_path, presentation_format,
                minio_object_key
         FROM proposal_pipeline_runs
         {where_clause}
@@ -179,9 +169,7 @@ async def list_pipeline_runs(
                 "created_at": str(r[4]),
                 "error_stage": r[5],
                 "error_message": r[6],
-                "presentation_path": r[7],
-                "presentation_format": r[8],
-                "minio_object_key": r[9],
+                "minio_object_key": r[7],
             }
             for r in rows
         ],
@@ -205,7 +193,6 @@ async def get_pipeline_run(
                r.created_at, r.error_stage, r.error_message,
                r.stage_results, r.sections,
                m.company_name, m.industry,
-               r.presentation_path, r.presentation_format,
                r.minio_object_key
         FROM proposal_pipeline_runs r
         LEFT JOIN meeting_minutes m ON m.id = r.minute_id
@@ -233,72 +220,8 @@ async def get_pipeline_run(
         "sections": row[8],
         "company_name": row[9],
         "industry": row[10],
-        "presentation_path": row[11],
-        "presentation_format": row[12],
-        "minio_object_key": row[13],
+        "minio_object_key": row[11],
     }
-
-
-@router.patch("/runs/{run_id}/presentation")
-async def update_run_presentation(
-    run_id: UUID,
-    body: PresentationLinkRequest,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(require_sales_access),
-):
-    """Link a generated presentation to a pipeline run."""
-    tenant_id, _ = _extract_ids(current_user)
-
-    result = db.execute(text("""
-        UPDATE proposal_pipeline_runs
-        SET presentation_path = :path, presentation_format = :fmt
-        WHERE id = :run_id AND tenant_id = :tenant_id
-        RETURNING id
-    """), {
-        "run_id": str(run_id),
-        "tenant_id": str(tenant_id),
-        "path": body.presentation_path,
-        "fmt": body.presentation_format,
-    }).fetchone()
-    db.commit()
-
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pipeline run not found",
-        )
-
-    # Upload to MinIO if enabled
-    minio_object_key = None
-    storage = get_storage_service()
-    if storage:
-        try:
-            download_url = f"{settings.presenton_base_url}{body.presentation_path}"
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.get(download_url)
-                resp.raise_for_status()
-                pptx_data = resp.content
-
-            minio_object_key = await storage.upload_bytes(
-                data=pptx_data,
-                tenant_id=str(tenant_id),
-                run_id=str(run_id),
-            )
-            db.execute(text("""
-                UPDATE proposal_pipeline_runs
-                SET minio_object_key = :key
-                WHERE id = :run_id AND tenant_id = :tenant_id
-            """), {
-                "key": minio_object_key,
-                "run_id": str(run_id),
-                "tenant_id": str(tenant_id),
-            })
-            db.commit()
-            logger.info(f"Uploaded presentation to MinIO: {minio_object_key}")
-        except Exception as e:
-            logger.error(f"Failed to upload presentation to MinIO: {e}")
-
-    return {"ok": True, "minio_object_key": minio_object_key}
 
 
 @router.get("/runs/{run_id}/download")
@@ -307,11 +230,11 @@ async def download_run_presentation(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_sales_access),
 ):
-    """Download presentation file (MinIO or Presenton fallback)."""
+    """Download presentation file from MinIO."""
     tenant_id, _ = _extract_ids(current_user)
 
     row = db.execute(text("""
-        SELECT minio_object_key, presentation_path
+        SELECT minio_object_key
         FROM proposal_pipeline_runs
         WHERE id = :run_id AND tenant_id = :tenant_id
     """), {
@@ -325,45 +248,23 @@ async def download_run_presentation(
             detail="Pipeline run not found",
         )
 
-    minio_key, presentation_path = row[0], row[1]
-
-    # Try MinIO first
-    if minio_key:
-        storage = get_storage_service()
-        if storage:
-            try:
-                data = await storage.download_bytes(minio_key)
-                filename = minio_key.rsplit("/", 1)[-1]
-                return Response(
-                    content=data,
-                    media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                    headers={
-                        "Content-Disposition": f'attachment; filename="{filename}"',
-                    },
-                )
-            except Exception as e:
-                logger.warning(f"MinIO download failed, falling back to Presenton: {e}")
-
-    # Fallback to Presenton proxy
-    if not presentation_path:
+    minio_key = row[0]
+    if not minio_key:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No presentation file available",
         )
 
-    download_url = f"{settings.presenton_base_url}{presentation_path}"
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.get(download_url)
-        if resp.status_code != 200:
-            raise HTTPException(
-                status_code=resp.status_code,
-                detail="Failed to download from Presenton",
-            )
-        filename = presentation_path.rsplit("/", 1)[-1]
-        return Response(
-            content=resp.content,
-            media_type=resp.headers.get("content-type", "application/octet-stream"),
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
-            },
-        )
+    storage = get_storage_service()
+    if not storage:
+        raise HTTPException(status_code=500, detail="Storage service not available")
+
+    data = await storage.download_bytes(minio_key)
+    filename = minio_key.rsplit("/", 1)[-1]
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

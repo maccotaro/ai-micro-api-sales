@@ -31,7 +31,7 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET=documents
-      - PRESENTON_BASE_URL=http://host.docker.internal:5000
+      - EXPORT_SERVICE_URL=http://host.docker.internal:8015
     env_file:
       - .env
     volumes:

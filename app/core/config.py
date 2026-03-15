@@ -56,8 +56,8 @@ class Settings(BaseSettings):
     minio_bucket: str = "documents"
     minio_presentations_prefix: str = "presentations"
 
-    # Presenton service
-    presenton_base_url: str = "http://host.docker.internal:5000"
+    # Export service (Marp conversion)
+    export_service_url: str = "http://host.docker.internal:8015"
 
     class Config:
         env_file = ".env"

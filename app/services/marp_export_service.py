@@ -1,34 +1,23 @@
 """Marp export service for proposal documents.
 
-Converts proposal document pages to PPTX/PDF via Marp CLI.
-Falls back to Markdown download if Marp CLI is not installed.
+Delegates conversion to api-export service via HTTP.
+Builds Marp Markdown locally (domain logic), sends to api-export for conversion.
 """
-import io
 import logging
-import os
-import shutil
-import subprocess
-import tempfile
-from typing import Optional
 from uuid import UUID
 
+import httpx
 from fastapi import HTTPException
-from fastapi.responses import StreamingResponse, Response
+
+from app.utils.markdown_table_fixer import fix_markdown_tables
+from fastapi.responses import Response
 
 from app.core.config import settings
 from app.models.proposal_document import ProposalDocument
 
 logger = logging.getLogger(__name__)
 
-# Check if Marp CLI is available
-_marp_available: Optional[bool] = None
-
-
-def _check_marp_available() -> bool:
-    global _marp_available
-    if _marp_available is None:
-        _marp_available = shutil.which("marp") is not None or shutil.which("npx") is not None
-    return _marp_available
+EXPORT_TIMEOUT = 120.0
 
 
 def _build_marp_markdown(doc: ProposalDocument) -> str:
@@ -104,86 +93,96 @@ style: |
 
 """
     pages_sorted = sorted(doc.pages, key=lambda p: p.page_number)
-    page_markdowns = [p.markdown_content for p in pages_sorted]
+    page_markdowns = [
+        _strip_marp_separators(fix_markdown_tables(p.markdown_content or ""))
+        for p in pages_sorted
+    ]
     return frontmatter + "\n\n---\n\n".join(page_markdowns)
 
 
-async def export_to_marp(doc: ProposalDocument, fmt: str) -> dict:
-    """Export proposal document to PPTX/PDF via Marp CLI, or Markdown fallback.
+def _strip_marp_separators(md: str) -> str:
+    """Remove leading/trailing ``---`` slide separators from a page.
 
-    Marp CLI requires Chromium for PPTX/PDF. If unavailable, --html is tried.
-    Final fallback: upload Marp Markdown directly.
+    LLMs sometimes include ``---`` at the start or end of a page which,
+    combined with the join separator, creates empty slides in Marp output.
     """
+    lines = md.split("\n")
+    # Strip trailing ---
+    while lines and lines[-1].strip() == "---":
+        lines.pop()
+    # Strip leading ---
+    while lines and lines[0].strip() == "---":
+        lines.pop(0)
+    return "\n".join(lines)
+
+
+async def export_to_marp(doc: ProposalDocument, fmt: str) -> dict:
+    """Export proposal document via api-export service."""
     markdown = _build_marp_markdown(doc)
     doc_id_str = str(doc.id)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_path = os.path.join(tmpdir, "presentation.md")
-        with open(input_path, "w", encoding="utf-8") as f:
-            f.write(markdown)
+    url = f"{settings.export_service_url}/convert"
+    payload = {
+        "markdown": markdown,
+        "format": fmt,
+        "filename": "proposal",
+        "caller": f"proposal-documents/{doc_id_str}",
+    }
+    headers = {"X-Internal-Secret": settings.internal_api_secret}
 
-        # Try Marp CLI with --html first (no Chromium needed)
-        html_path = os.path.join(tmpdir, "presentation.html")
-        try:
-            result = subprocess.run(
-                ["npx", "@marp-team/marp-cli", input_path, "-o", html_path, "--html"],
-                capture_output=True, text=True, timeout=60,
-            )
-            if result.returncode == 0 and os.path.exists(html_path):
-                with open(html_path, "rb") as f:
-                    html_bytes = f.read()
-                object_key = await _upload_to_minio(doc_id_str, html_bytes, "presentation.html",
-                                                     "text/html; charset=utf-8")
-                return {"download_url": f"/api/sales/proposal-documents/{doc_id_str}/export/download",
-                        "object_key": object_key, "format": "html",
-                        "note": "HTMLスライドとしてエクスポートしました。ブラウザで開けます。"}
-        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-            logger.warning("Marp CLI HTML export failed: %s", e)
+    try:
+        async with httpx.AsyncClient(timeout=EXPORT_TIMEOUT) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+    except httpx.ConnectError:
+        logger.error("Export service unreachable at %s", settings.export_service_url)
+        raise HTTPException(status_code=502, detail="Export service unavailable")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Export service timed out")
 
-        # Fallback: upload Markdown directly
-        md_bytes = markdown.encode("utf-8")
-        object_key = await _upload_to_minio(doc_id_str, md_bytes, "presentation.md",
-                                             "text/markdown; charset=utf-8")
-        return {"download_url": f"/api/sales/proposal-documents/{doc_id_str}/export/download",
-                "object_key": object_key, "format": "md",
-                "note": "Markdownファイルとしてエクスポートしました。"}
+    if resp.status_code != 200:
+        detail = resp.text[:500] if resp.text else "Unknown error"
+        logger.error("Export service returned %d: %s", resp.status_code, detail)
+        raise HTTPException(status_code=502, detail=f"Export service error: {detail}")
 
-
-async def _upload_to_minio(doc_id: str, data: bytes, filename: str, content_type: str) -> str:
-    """Upload bytes to MinIO using StorageService."""
-    from app.services.storage_service import get_storage_service
-    storage = get_storage_service()
-    if storage is None:
-        raise HTTPException(status_code=500, detail="MinIO storage is not enabled")
-    object_key = await storage.upload_bytes(
-        data=data,
-        tenant_id="proposal-documents",
-        run_id=doc_id,
-        filename=filename,
-        content_type=content_type,
-    )
-    return object_key
+    result = resp.json()
+    return {
+        "download_url": f"/api/sales/proposal-documents/{doc_id_str}/export/download",
+        "object_key": result["object_key"],
+        "format": result["format"],
+    }
 
 
-async def download_export_file(document_id: UUID) -> Response:
-    """Download exported file from MinIO."""
+async def download_export_file(
+    document_id: UUID,
+    preferred_format: str | None = None,
+) -> Response:
+    """Download exported file from MinIO.
+
+    When *preferred_format* is given, that format is tried first.
+    Falls back to remaining formats so old download links keep working.
+    """
     from app.services.storage_service import get_storage_service
     storage = get_storage_service()
     if storage is None:
         raise HTTPException(status_code=500, detail="MinIO storage is not enabled")
 
     doc_id_str = str(document_id)
-    FORMATS = {
-        "html": "text/html; charset=utf-8",
-        "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    caller = f"proposal-documents/{doc_id_str}"
+    ALL_FORMATS = {
         "pdf": "application/pdf",
-        "md": "text/markdown; charset=utf-8",
+        "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "html": "text/html; charset=utf-8",
     }
 
-    for fmt, media_type in FORMATS.items():
-        # Use same key structure as _upload_to_minio → storage.upload_bytes
-        # which builds: {prefix}/{tenant_id}/{run_id}/{filename}
-        object_key = storage._object_key("proposal-documents", doc_id_str, f"presentation.{fmt}")
+    # Preferred format first, then the rest
+    if preferred_format and preferred_format in ALL_FORMATS:
+        order = [preferred_format] + [f for f in ALL_FORMATS if f != preferred_format]
+    else:
+        order = list(ALL_FORMATS.keys())
+
+    for fmt in order:
+        media_type = ALL_FORMATS[fmt]
+        object_key = f"exports/{caller}/proposal.{fmt}"
         try:
             data = await storage.download_bytes(object_key)
             return Response(

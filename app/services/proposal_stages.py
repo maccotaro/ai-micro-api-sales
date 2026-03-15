@@ -26,6 +26,7 @@ from app.services.proposal_pipeline_prompts import (
     build_stage7_prompt, build_stage8_prompt,
     build_stage9_prompt, build_stage10_page_prompt,
 )
+from app.utils.markdown_table_fixer import fix_markdown_tables
 from app.services.proposal_data_loaders import (
     load_success_cases, load_publication_records_for_proposal,
 )
@@ -260,40 +261,40 @@ async def stage10_page_generation(
             )
 
         result = await _call_page_llm(messages)
-        markdown = result.get("response", "")
+        markdown = fix_markdown_tables(result.get("response", ""))
         line_count = len([l for l in markdown.strip().split("\n") if l.strip()])
 
-        if line_count > 20:
+        if line_count > 16:
             # Too long: ask LLM to split into 2 pages
             split_msgs = [
-                {"role": "system", "content": f"以下のスライド内容を2ページに分割してください。各ページは15行以内に収めてください。ページ区切りは「---PAGE_BREAK---」で示してください。\n\n{markdown}"},
+                {"role": "system", "content": f"以下のスライド内容を2ページに分割してください。各ページは10行以内に収めてください。ページ区切りは「---PAGE_BREAK---」で示してください。\n\n{markdown}"},
                 {"role": "user", "content": "2ページに分割してください。"},
             ]
             split_result = await _call_page_llm(split_msgs)
             split_text = split_result.get("response", markdown)
             if "---PAGE_BREAK---" in split_text:
                 parts = split_text.split("---PAGE_BREAK---", 1)
-                markdown = parts[0].strip()
+                markdown = fix_markdown_tables(parts[0].strip())
                 # Insert extra page after current
                 extra_page = {
                     "page_number": page_spec["page_number"] + 0.5,
                     "title": page_spec.get("title", "") + "（続き）",
                     "purpose": page_spec.get("purpose", ""),
-                    "markdown_content": parts[1].strip(),
+                    "markdown_content": fix_markdown_tables(parts[1].strip()),
                     "data_sources": page_spec.get("data_sources", []),
                     "generation_context": {"story_theme": story_theme, "page_spec": page_spec, "page_data": page_data, "split": True},
                 }
                 generated_pages.append(extra_page)
             else:
                 markdown = split_text
-        elif line_count > 15:
+        elif line_count > 12:
             # Slightly over: ask LLM to condense
             condense_msgs = [
-                {"role": "system", "content": f"以下のスライド内容を15行以内に要約してください。重要な数値やキーポイントは残してください。\n\n{markdown}"},
-                {"role": "user", "content": "15行以内に要約してください。"},
+                {"role": "system", "content": f"以下のスライド内容を10行以内に要約してください。重要な数値やキーポイントは残してください。\n\n{markdown}"},
+                {"role": "user", "content": "10行以内に要約してください。"},
             ]
             condense_result = await _call_page_llm(condense_msgs)
-            markdown = condense_result.get("response", markdown)
+            markdown = fix_markdown_tables(condense_result.get("response", markdown))
 
         generated_pages.append({
             "page_number": page_spec["page_number"],

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.model_settings_client import get_chat_num_ctx
+from app.utils.markdown_table_fixer import fix_markdown_tables
 from app.models.proposal_document import (
     ProposalDocument, ProposalDocumentPage, ProposalDocumentChat,
 )
@@ -140,7 +141,7 @@ async def _handle_page_rewrite(
 
     new_markdown = result.get("response", "")
     if new_markdown:
-        page.markdown_content = new_markdown
+        page.markdown_content = fix_markdown_tables(new_markdown)
         db.commit()
         return f"ページを更新しました。\n\n{new_markdown}", True
     return "ページの書き直しに失敗しました。", False

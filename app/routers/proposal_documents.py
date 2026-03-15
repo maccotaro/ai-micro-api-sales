@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import require_sales_access
 from app.db.session import get_db
+from app.utils.markdown_table_fixer import fix_markdown_tables
 from app.models.proposal_document import (
     ProposalDocument, ProposalDocumentPage, ProposalDocumentChat,
 )
@@ -154,7 +155,7 @@ async def get_document(
             id=str(p.id),
             page_number=p.page_number,
             title=p.title,
-            markdown_content=p.markdown_content,
+            markdown_content=fix_markdown_tables(p.markdown_content or ""),
             purpose=p.purpose,
         )
         for p in sorted(doc.pages, key=lambda p: p.page_number)
@@ -350,6 +351,7 @@ async def export_document(
 @router.get("/{document_id}/export/download")
 async def download_export(
     document_id: UUID,
+    format: Optional[str] = Query(None, pattern=r"^(html|pdf|pptx)$"),
     current_user: dict = Depends(require_sales_access),
     db: Session = Depends(get_db),
 ):
@@ -364,4 +366,4 @@ async def download_export(
         raise HTTPException(status_code=404, detail="Document not found")
 
     from app.services.marp_export_service import download_export_file
-    return await download_export_file(document_id)
+    return await download_export_file(document_id, preferred_format=format)
