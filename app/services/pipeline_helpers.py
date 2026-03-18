@@ -1,14 +1,18 @@
 """Helper functions for the proposal pipeline (JSON parsing, evidence validation)."""
 import json
 import logging
+import re
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+_THINK_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+
 
 def parse_json_response(text: str) -> dict:
     """Parse JSON from LLM response, handling markdown code blocks and truncation."""
-    text = text.strip()
+    # Strip <think>...</think> blocks (Qwen3 thinking mode via Ollama/vLLM)
+    text = _THINK_RE.sub("", text).strip()
     if text.startswith("```"):
         lines = text.split("\n")
         lines = lines[1:]  # Remove first ```json line
