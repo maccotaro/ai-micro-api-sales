@@ -161,17 +161,17 @@ async def stage2_reverse_planning(
     seasonal_text = _build_seasonal_text(seasonal_chunks, current_month)
 
     prompt = STAGE2_SYSTEM_PROMPT.format(
-        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2),
+        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2)[:2000],
         kb_context=build_kb_context_block(kb_results),
-        product_data=json.dumps(context["product_data"], ensure_ascii=False, indent=2),
-        simulation_data=json.dumps(sim_data, ensure_ascii=False, indent=2),
-        wage_data=json.dumps(wage, ensure_ascii=False, indent=2),
-        publication_data=json.dumps(context.get("publication_data", []), ensure_ascii=False, indent=2),
-        campaign_data=json.dumps(context.get("campaign_data", []), ensure_ascii=False, indent=2),
+        product_data=json.dumps(context["product_data"][:5], ensure_ascii=False, indent=2)[:1500],
+        simulation_data=json.dumps(sim_data[:3], ensure_ascii=False, indent=2)[:800],
+        wage_data=json.dumps(wage[:3], ensure_ascii=False, indent=2)[:600],
+        publication_data=json.dumps(context.get("publication_data", [])[:3], ensure_ascii=False, indent=2)[:800],
+        campaign_data=json.dumps(context.get("campaign_data", [])[:3], ensure_ascii=False, indent=2)[:600],
         budget_range=budget_range,
         next_action_date=next_action_date,
         current_month=str(current_month),
-        seasonal_context=seasonal_text,
+        seasonal_context=seasonal_text[:500],
     )
 
     return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=2, pipeline_run_id=pipeline_run_id)
@@ -193,8 +193,8 @@ async def stage3_action_plan(
     kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid)
 
     prompt = STAGE3_SYSTEM_PROMPT.format(
-        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2),
-        stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2),
+        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2)[:1500],
+        stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2)[:2000],
         kb_context=build_kb_context_block(kb_results),
         company_name=context["meeting"].get("company_name", ""),
     )
@@ -219,11 +219,11 @@ async def stage4_ad_copy(
 
     catchcopy_count = stage_cfg.catchcopy_count or 5 if stage_cfg.generate_catchcopy is not False else 0
     prompt = STAGE4_SYSTEM_PROMPT.format(
-        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2),
-        stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2),
+        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2)[:1500],
+        stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2)[:2000],
         kb_context=build_kb_context_block(kb_results),
         catchcopy_count=catchcopy_count,
-        meeting_text=context["meeting"]["raw_text"],
+        meeting_text=context["meeting"]["raw_text"][:2000],
     )
 
     return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=4, pipeline_run_id=pipeline_run_id)
@@ -248,12 +248,12 @@ async def stage5_checklist_summary(
     doc_links_text = _build_document_links_text(reference_chunks)
 
     prompt = STAGE5_SYSTEM_PROMPT.format(
-        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2),
-        stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2),
-        stage3_output=json.dumps(stage3_output, ensure_ascii=False, indent=2),
-        stage4_output=stage4_text,
-        meeting_text=context["meeting"]["raw_text"],
-        document_links=doc_links_text,
+        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2)[:1500],
+        stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2)[:2000],
+        stage3_output=json.dumps(stage3_output, ensure_ascii=False, indent=2)[:1500],
+        stage4_output=stage4_text[:1500],
+        meeting_text=context["meeting"]["raw_text"][:2000],
+        document_links=doc_links_text[:1000],
     )
 
     return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=5, pipeline_run_id=pipeline_run_id)
@@ -273,21 +273,34 @@ async def _call_llm(
     """Call LLM and parse JSON response."""
     # Use prompt_override if configured
     final_prompt = stage_cfg.prompt_override if stage_cfg.prompt_override else system_prompt
+    user_msg = "上記の情報に基づいて、指定されたJSON形式で出力してください。"
     messages = [
         {"role": "system", "content": final_prompt},
-        {"role": "user", "content": "上記の情報に基づいて、指定されたJSON形式で出力してください。"},
+        {"role": "user", "content": user_msg},
     ]
+
+    # Dynamic max_tokens: estimate input tokens, allocate rest to output
+    context_len = get_chat_num_ctx() or 16384
+    # Rough estimate: ~3 chars per token for mixed JP/EN
+    estimated_input = (len(final_prompt) + len(user_msg)) // 3
+    max_tokens = stage_cfg.max_tokens
+    if not max_tokens:
+        max_tokens = min(4096, max(512, context_len - estimated_input - 256))
+        logger.info(
+            "Stage %d: dynamic max_tokens=%d (context=%d, est_input=%d)",
+            stage_num, max_tokens, context_len, estimated_input,
+        )
 
     result = await llm_client.chat(
         messages=messages,
         service_name="api-sales",
         model=stage_cfg.model,
         temperature=stage_cfg.temperature or 0.3,
-        max_tokens=stage_cfg.max_tokens,
+        max_tokens=max_tokens,
         tenant_id=str(tenant_id),
         pipeline_stage=stage_num,
         pipeline_run_id=pipeline_run_id,
-        provider_options={"num_ctx": get_chat_num_ctx()},
+        provider_options={"num_ctx": context_len},
     )
 
     response_text = result.get("response", "")

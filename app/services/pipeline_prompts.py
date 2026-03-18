@@ -474,11 +474,17 @@ STAGE5_SYSTEM_PROMPT = """あなたは営業支援の総括AIです。
 }}"""
 
 
-def build_kb_context_block(kb_results: dict[str, list[str]]) -> str:
-    """Build KB context block from search results.
+def build_kb_context_block(
+    kb_results: dict[str, list[str]],
+    max_chunks_per_category: int = 5,
+    max_chunk_chars: int = 300,
+) -> str:
+    """Build KB context block from search results with truncation.
 
     Args:
         kb_results: Dict of category_name -> list of chunk texts.
+        max_chunks_per_category: Max chunks per category (default 5).
+        max_chunk_chars: Max chars per chunk (default 300).
 
     Returns:
         Formatted context string for prompt injection.
@@ -490,7 +496,10 @@ def build_kb_context_block(kb_results: dict[str, list[str]]) -> str:
     for category, chunks in kb_results.items():
         if chunks:
             lines.append(f"\n#### {category}")
-            for i, chunk in enumerate(chunks, 1):
-                lines.append(f"[{i}] {chunk}")
+            for i, chunk in enumerate(chunks[:max_chunks_per_category], 1):
+                text = chunk[:max_chunk_chars]
+                if len(chunk) > max_chunk_chars:
+                    text += "…"
+                lines.append(f"[{i}] {text}")
 
     return "\n".join(lines)
