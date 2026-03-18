@@ -15,7 +15,7 @@ services:
       - JWKS_URL=http://host.docker.internal:8002/.well-known/jwks.json
       - JWT_ISSUER=https://auth.example.com
       - JWT_AUDIENCE=fastapi-api
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - VLLM_EMBED_URL=http://host.docker.internal:8101
       - LLM_SERVICE_URL=http://host.docker.internal:8012
       # Model settings via api-admin internal API
       - ADMIN_INTERNAL_URL=http://host.docker.internal:8003

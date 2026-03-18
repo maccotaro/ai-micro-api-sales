@@ -33,7 +33,7 @@ def mock_settings():
     settings_mock.rag_service_url = "http://localhost:8010"
     settings_mock.jwt_issuer = "https://test.example.com"
     settings_mock.jwt_audience = "test-api"
-    settings_mock.ollama_base_url = "http://localhost:11434"
+    settings_mock.vllm_embed_url = "http://localhost:8001"
     settings_mock.openai_api_key = ""
     settings_mock.default_llm_model = "gemma2:9b"
     settings_mock.default_embedding_model = "bge-m3:567m"

@@ -24,7 +24,7 @@ ai-micro-api-sales (Port 8005)
     │
     ├── api-auth (Port 8002) ← JWT認証
     │
-    ├── Ollama (Port 11434) ← LLM処理
+    ├── api-llm (Port 8012) → vLLM ← LLM処理
     │
     └── Neo4j (Port 7687) ← グラフデータベース
 ```
@@ -317,7 +317,7 @@ JWT_AUDIENCE=fastapi-api
 RAG_SERVICE_URL=http://host.docker.internal:8010
 
 # LLM
-OLLAMA_BASE_URL=http://host.docker.internal:11434
+VLLM_EMBED_URL=http://host.docker.internal:8101
 OPENAI_API_KEY=your-api-key
 
 # Neo4j Graph Database
@@ -416,7 +416,7 @@ curl -X GET http://localhost:8005/api/sales/graph/stats \
 
 ### 使用モデル
 
-- **解析**: `gemma2:9b` (Ollama)
+- **解析**: Qwen/Qwen3-8B-AWQ (vLLM via api-llm)
 - **温度**: 0.3（解析）、0.5（提案生成）
 
 ### プロンプトテンプレート
@@ -440,14 +440,14 @@ curl -X GET http://localhost:8005/api/sales/graph/stats \
 
 ## トラブルシューティング
 
-### Ollama接続エラー
+### vLLM接続エラー
 
 ```bash
-# Ollamaが起動しているか確認
-curl http://localhost:11434/api/tags
+# vLLMが起動しているか確認
+curl http://localhost:8000/v1/models
 
-# モデルがインストールされているか確認
-ollama list
+# Embedding サーバー確認
+curl http://localhost:8101/v1/models
 ```
 
 ### データベース接続エラー

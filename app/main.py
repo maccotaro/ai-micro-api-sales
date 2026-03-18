@@ -79,7 +79,7 @@ async def global_exception_handler(request, exc):
 async def startup_event():
     logger.info("AI Micro API Sales service starting up...")
     logger.info(f"Database URL: {settings.salesdb_url.split('@')[-1] if '@' in settings.salesdb_url else '***'}")
-    logger.info(f"Ollama URL: {settings.ollama_base_url}")
+    logger.info(f"vLLM Embed URL: {settings.vllm_embed_url}")
     logger.info(f"CORS origins: {settings.cors_origins}")
 
     # Initialize MinIO storage if enabled

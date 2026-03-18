@@ -10,7 +10,7 @@ from uuid import UUID
 import asyncio
 import json
 
-from langchain_community.embeddings import OllamaEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -35,9 +35,10 @@ class EmbeddingService:
 
             logger.info("Initializing EmbeddingService...")
 
-            self.embeddings = OllamaEmbeddings(
-                base_url=settings.ollama_base_url,
+            self.embeddings = OpenAIEmbeddings(
+                base_url=settings.vllm_embed_url,
                 model=get_embedding_model(),
+                api_key="dummy",  # vLLM doesn't require API key
             )
 
             # Test embedding generation

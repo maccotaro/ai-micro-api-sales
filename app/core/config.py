@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     jwt_audience: str = "fastapi-api"
 
     # LLM Services (model names are managed via DB system_settings, fetched via internal API)
-    ollama_base_url: str = "http://localhost:11434"
+    vllm_embed_url: str = "http://localhost:8001"
     llm_service_url: str = "http://localhost:8012"
     openai_api_key: str = ""
     admin_internal_url: str = "http://localhost:8003"
