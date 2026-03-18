@@ -28,7 +28,7 @@ def parse_json_response(text: str) -> dict:
         if repaired is not None:
             logger.warning("Repaired truncated JSON response successfully")
             return repaired
-        logger.warning("Failed to parse LLM JSON response, returning as raw text")
+        logger.warning("Failed to parse LLM JSON response, returning as raw text. First 500 chars: %s", text[:500])
         return {"raw_response": text}
 
 
