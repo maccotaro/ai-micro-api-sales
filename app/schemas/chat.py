@@ -79,3 +79,4 @@ class ChatStreamRequest(BaseModel):
     """ストリーミングチャットリクエスト"""
     content: str = Field(..., min_length=1, max_length=10000)
     conversation_id: Optional[UUID] = None  # Noneの場合は新規会話を作成
+    persona_id: Optional[UUID] = None  # ペルソナID（ペルソナベース応答生成用）

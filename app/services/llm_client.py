@@ -75,6 +75,8 @@ class LLMClient:
         provider_options: Optional[dict[str, Any]] = None,
         timeout: Optional[float] = None,
         tenant_id: Optional[str] = None,
+        persona_id: Optional[str] = None,
+        persona_mode: Optional[str] = None,
     ) -> dict:
         """Non-streaming generate call. Returns {"response": str, "model": str, "total_tokens": int}."""
         payload: dict[str, Any] = {
@@ -92,6 +94,10 @@ class LLMClient:
             payload["format"] = format
         if provider_options:
             payload["provider_options"] = provider_options
+        if persona_id:
+            payload["persona_id"] = persona_id
+        if persona_mode:
+            payload["persona_mode"] = persona_mode
 
         try:
             async with httpx.AsyncClient(timeout=timeout or self.timeout) as client:
@@ -119,6 +125,8 @@ class LLMClient:
         tenant_id: Optional[str] = None,
         pipeline_stage: Optional[int] = None,
         pipeline_run_id: Optional[str] = None,
+        persona_id: Optional[str] = None,
+        persona_mode: Optional[str] = None,
     ) -> dict:
         """Non-streaming chat call. Returns {"response": str, "model": str, "total_tokens": int}."""
         payload: dict[str, Any] = {
@@ -137,6 +145,10 @@ class LLMClient:
             payload["pipeline_stage"] = pipeline_stage
         if pipeline_run_id is not None:
             payload["pipeline_run_id"] = pipeline_run_id
+        if persona_id:
+            payload["persona_id"] = persona_id
+        if persona_mode:
+            payload["persona_mode"] = persona_mode
 
         try:
             async with httpx.AsyncClient(timeout=timeout or self.timeout) as client:
@@ -162,6 +174,8 @@ class LLMClient:
         provider_options: Optional[dict[str, Any]] = None,
         timeout: Optional[float] = None,
         tenant_id: Optional[str] = None,
+        persona_id: Optional[str] = None,
+        persona_mode: Optional[str] = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Streaming chat call. Yields event dicts with 'token' and 'type' keys from SSE stream."""
         payload: dict[str, Any] = {
@@ -176,6 +190,10 @@ class LLMClient:
             payload["max_tokens"] = max_tokens
         if provider_options:
             payload["provider_options"] = provider_options
+        if persona_id:
+            payload["persona_id"] = persona_id
+        if persona_mode:
+            payload["persona_mode"] = persona_mode
 
         try:
             async with httpx.AsyncClient(timeout=timeout or self.stream_timeout) as client:

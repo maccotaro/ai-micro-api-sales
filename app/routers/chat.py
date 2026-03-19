@@ -82,6 +82,7 @@ async def stream_chat(
             user_id=user_id,
             db=db,
             conversation_id=request.conversation_id,
+            persona_id=str(request.persona_id) if request.persona_id else None,
         ),
         media_type="text/event-stream",
         headers={

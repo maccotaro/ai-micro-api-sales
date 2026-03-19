@@ -104,6 +104,7 @@ async def stage1_issue_structuring(
     llm_client: LLMClient,
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
+    persona_id: Optional[str] = None,
 ) -> dict:
     """Stage 1: Extract and structure issues with BANT-C analysis.
 
@@ -123,7 +124,7 @@ async def stage1_issue_structuring(
         parsed_json=json.dumps(context["meeting"]["parsed_json"], ensure_ascii=False, indent=2),
     )
 
-    result = await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=1, pipeline_run_id=pipeline_run_id)
+    result = await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=1, pipeline_run_id=pipeline_run_id, persona_id=persona_id)
 
     # Post-process: validate evidence fields against actual meeting text
     raw_text = context["meeting"]["raw_text"]
@@ -139,6 +140,7 @@ async def stage2_reverse_planning(
     llm_client: LLMClient,
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
+    persona_id: Optional[str] = None,
 ) -> dict:
     """Stage 2: Reverse-calculation planning with DB data."""
     stage_cfg = config.get_stage(2)
@@ -174,7 +176,7 @@ async def stage2_reverse_planning(
         seasonal_context=seasonal_text[:500],
     )
 
-    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=2, pipeline_run_id=pipeline_run_id)
+    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=2, pipeline_run_id=pipeline_run_id, persona_id=persona_id)
 
 
 async def stage3_action_plan(
@@ -185,6 +187,7 @@ async def stage3_action_plan(
     llm_client: LLMClient,
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
+    persona_id: Optional[str] = None,
 ) -> dict:
     """Stage 3: Detailed action plan generation."""
     stage_cfg = config.get_stage(3)
@@ -199,7 +202,7 @@ async def stage3_action_plan(
         company_name=context["meeting"].get("company_name", ""),
     )
 
-    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=3, pipeline_run_id=pipeline_run_id)
+    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=3, pipeline_run_id=pipeline_run_id, persona_id=persona_id)
 
 
 async def stage4_ad_copy(
@@ -210,6 +213,7 @@ async def stage4_ad_copy(
     llm_client: LLMClient,
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
+    persona_id: Optional[str] = None,
 ) -> dict:
     """Stage 4: Ad copy / draft proposal generation."""
     stage_cfg = config.get_stage(4)
@@ -226,7 +230,7 @@ async def stage4_ad_copy(
         meeting_text=context["meeting"]["raw_text"][:2000],
     )
 
-    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=4, pipeline_run_id=pipeline_run_id)
+    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=4, pipeline_run_id=pipeline_run_id, persona_id=persona_id)
 
 
 async def stage5_checklist_summary(
@@ -239,6 +243,7 @@ async def stage5_checklist_summary(
     llm_client: LLMClient,
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
+    persona_id: Optional[str] = None,
 ) -> dict:
     """Stage 5: Checklist + summary generation."""
     stage_cfg = config.get_stage(5)
@@ -256,7 +261,7 @@ async def stage5_checklist_summary(
         document_links=doc_links_text[:1000],
     )
 
-    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=5, pipeline_run_id=pipeline_run_id)
+    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=5, pipeline_run_id=pipeline_run_id, persona_id=persona_id)
 
 
 # ============================================================
@@ -269,6 +274,7 @@ async def _call_llm(
     tenant_id: UUID,
     stage_num: int,
     pipeline_run_id: Optional[str] = None,
+    persona_id: Optional[str] = None,
 ) -> dict:
     """Call LLM and parse JSON response."""
     # Use prompt_override if configured
@@ -301,6 +307,7 @@ async def _call_llm(
         pipeline_stage=stage_num,
         pipeline_run_id=pipeline_run_id,
         provider_options={"num_ctx": context_len},
+        persona_id=persona_id,
     )
 
     response_text = result.get("response", "")

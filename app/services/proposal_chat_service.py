@@ -219,6 +219,7 @@ class ProposalChatService:
         search_results: List[Dict[str, Any]],
         model: Optional[str] = None,
         provider_options: Optional[Dict[str, Any]] = None,
+        persona_id: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """単一媒体の提案をストリーミング生成。最後に media_proposal_text イベントで全文送信。"""
         # 該当媒体の検索結果のみをコンテキストに使用
@@ -243,6 +244,7 @@ class ProposalChatService:
             model=model,
             temperature=0.5,
             provider_options=provider_options,
+            persona_id=persona_id,
         ):
             token = chunk.get("token", "")
             chunk_type = chunk.get("type", "content")
@@ -267,6 +269,7 @@ class ProposalChatService:
         prefecture: Optional[str] = None,
         job_category: Optional[str] = None,
         employment_type: Optional[str] = None,
+        persona_id: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """商材提案をストリーミング生成（媒体別LLM呼び出し分離版）。"""
         try:
@@ -326,6 +329,7 @@ class ProposalChatService:
                     search_results=search_results,
                     model=model,
                     provider_options=provider_options,
+                    persona_id=persona_id,
                 ):
                     # media_proposal_text は内部用 → 提案テキスト収集
                     if '"type": "media_proposal_text"' in chunk:
@@ -361,6 +365,7 @@ class ProposalChatService:
                     model=model,
                     temperature=0.5,
                     provider_options=provider_options,
+                    persona_id=persona_id,
                 ):
                     token = chunk.get("token", "")
                     chunk_type = chunk.get("type", "content")
@@ -396,6 +401,7 @@ class ProposalChatService:
         prefecture: Optional[str] = None,
         job_category: Optional[str] = None,
         employment_type: Optional[str] = None,
+        persona_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """商材提案を生成（非ストリーミング、媒体別LLM呼び出し分離版）。"""
         # Step 1: 9段階ハイブリッド検索（GraphRAG含む）
@@ -443,6 +449,7 @@ class ProposalChatService:
                 model=model,
                 temperature=0.5,
                 provider_options=provider_options,
+                persona_id=persona_id,
             )
             media_proposals[media_name] = result.get("response", "")
 
@@ -472,6 +479,7 @@ class ProposalChatService:
                 model=model,
                 temperature=0.5,
                 provider_options=provider_options,
+                persona_id=persona_id,
             )
             combined_proposal += f"## 総合比較・推薦\n{summary_result.get('response', '')}\n"
 

@@ -154,6 +154,7 @@ class ChatService:
         user_id: UUID,
         db: Session,
         conversation_id: Optional[UUID] = None,
+        persona_id: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """
         Stream chat response for a meeting minute.
@@ -209,6 +210,7 @@ class ChatService:
                 service_name="api-sales",
                 temperature=0.5,
                 provider_options={"num_ctx": get_chat_num_ctx()},
+                persona_id=persona_id,
             ):
                 token = chunk.get("token", "") if isinstance(chunk, dict) else chunk
                 if token:

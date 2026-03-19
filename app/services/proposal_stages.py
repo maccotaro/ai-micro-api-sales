@@ -103,6 +103,7 @@ async def stage7_industry_target_analysis(
     llm_client: LLMClient,
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
+    persona_id: Optional[str] = None,
 ) -> dict:
     """Analyze industry structure and target psychology."""
     stage_cfg = config.get_stage(7)
@@ -124,6 +125,7 @@ async def stage7_industry_target_analysis(
 
     result = await _call_llm(
         llm_client, prompt, stage_cfg, tenant_id, 7, pipeline_run_id,
+        persona_id=persona_id,
     )
 
     result["source"] = "kb_data" if has_psychology_kb else "general_knowledge"
@@ -144,6 +146,7 @@ async def stage8_appeal_strategy(
     llm_client: LLMClient,
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
+    persona_id: Optional[str] = None,
 ) -> dict:
     """Design strategy-based proposal axes with catchcopy-psychology linkage."""
     stage_cfg = config.get_stage(8)
@@ -158,6 +161,7 @@ async def stage8_appeal_strategy(
 
     result = await _call_llm(
         llm_client, prompt, stage_cfg, tenant_id, 8, pipeline_run_id,
+        persona_id=persona_id,
     )
     result["_prompt"] = prompt
     return result
@@ -175,6 +179,7 @@ async def stage9_story_structure(
     llm_client: LLMClient,
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
+    persona_id: Optional[str] = None,
 ) -> dict:
     """Design the proposal document's story structure."""
     stage_cfg = config.get_stage(9)
@@ -187,6 +192,7 @@ async def stage9_story_structure(
 
     result = await _call_llm(
         llm_client, prompt, stage_cfg, tenant_id, 9, pipeline_run_id,
+        persona_id=persona_id,
     )
 
     # Validate page count range
@@ -220,6 +226,7 @@ async def stage10_page_generation(
     user_id: UUID,
     pipeline_run_id: Optional[str] = None,
     minute_id: Optional[UUID] = None,
+    persona_id: Optional[str] = None,
 ) -> dict:
     """Generate Marp-compatible Markdown for each page."""
     stage_cfg = config.get_stage(10)
@@ -258,6 +265,7 @@ async def stage10_page_generation(
                 max_tokens=stage_cfg.max_tokens, tenant_id=str(tenant_id),
                 pipeline_stage=10, pipeline_run_id=pipeline_run_id,
                 provider_options={"num_ctx": get_chat_num_ctx()},
+                persona_id=persona_id,
             )
 
         result = await _call_page_llm(messages)

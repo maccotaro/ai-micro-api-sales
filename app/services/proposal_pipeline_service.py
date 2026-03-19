@@ -81,6 +81,7 @@ class ProposalPipelineService:
         tenant_id: UUID,
         user_id: UUID,
         db: Session,
+        persona_id: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """Execute pipeline with SSE event streaming."""
         pipeline_start = time.time()
@@ -164,6 +165,7 @@ class ProposalPipelineService:
                         stage_num, context, outputs, config,
                         tenant_id,
                         pipeline_run_id=run_id,
+                        persona_id=persona_id,
                     )
                     outputs[stage_num] = output
                     duration = int((time.time() - t0) * 1000)
@@ -212,6 +214,7 @@ class ProposalPipelineService:
                 async for sse_or_result in self._stream_proposal_stages(
                     context, outputs, config, tenant_id, user_id,
                     run_id, minute_id, db, stage_results,
+                    persona_id=persona_id,
                 ):
                     if isinstance(sse_or_result, str):
                         yield sse_or_result
@@ -277,11 +280,12 @@ class ProposalPipelineService:
         tenant_id: UUID,
         user_id: UUID,
         db: Session,
+        persona_id: Optional[str] = None,
     ) -> dict:
         """Execute pipeline and return complete JSON result."""
         result = {}
         async for event_str in self.stream_pipeline(
-            minute_id, tenant_id, user_id, db
+            minute_id, tenant_id, user_id, db, persona_id=persona_id
         ):
             # Parse SSE to extract result event
             if event_str.startswith("data: "):
@@ -303,44 +307,46 @@ class ProposalPipelineService:
         config: PipelineConfigData,
         tenant_id: UUID,
         pipeline_run_id: Optional[str] = None,
+        persona_id: Optional[str] = None,
     ) -> dict:
         """Execute a single LLM stage."""
         run_id_str = str(pipeline_run_id) if pipeline_run_id else None
         if stage_num == 1:
             return await stage1_issue_structuring(
                 context, config, self.llm_client, tenant_id,
-                pipeline_run_id=run_id_str,
+                pipeline_run_id=run_id_str, persona_id=persona_id,
             )
         elif stage_num == 2:
             return await stage2_reverse_planning(
                 context, prev_outputs.get(1, {}), config,
                 self.llm_client, tenant_id,
-                pipeline_run_id=run_id_str,
+                pipeline_run_id=run_id_str, persona_id=persona_id,
             )
         elif stage_num == 3:
             return await stage3_action_plan(
                 context, prev_outputs.get(1, {}), prev_outputs.get(2, {}),
                 config, self.llm_client, tenant_id,
-                pipeline_run_id=run_id_str,
+                pipeline_run_id=run_id_str, persona_id=persona_id,
             )
         elif stage_num == 4:
             return await stage4_ad_copy(
                 context, prev_outputs.get(1, {}), prev_outputs.get(2, {}),
                 config, self.llm_client, tenant_id,
-                pipeline_run_id=run_id_str,
+                pipeline_run_id=run_id_str, persona_id=persona_id,
             )
         elif stage_num == 5:
             return await stage5_checklist_summary(
                 context, prev_outputs.get(1, {}), prev_outputs.get(2, {}),
                 prev_outputs.get(3, {}), prev_outputs.get(4),
                 config, self.llm_client, tenant_id,
-                pipeline_run_id=run_id_str,
+                pipeline_run_id=run_id_str, persona_id=persona_id,
             )
         raise ValueError(f"Unknown stage: {stage_num}")
 
     async def _stream_proposal_stages(
         self, context, outputs, config, tenant_id, user_id,
         run_id, minute_id, db, stage_results,
+        persona_id: Optional[str] = None,
     ):
         """Execute Stage 6-10, yielding SSE events and final dict result."""
         run_id_str = str(run_id) if run_id else None
@@ -378,16 +384,19 @@ class ProposalPipelineService:
                     out = await stage7_industry_target_analysis(
                         context, outputs.get(1, {}), outputs[6],
                         config, self.llm_client, tenant_id, run_id_str,
+                        persona_id=persona_id,
                     )
                 elif sn == 8:
                     out = await stage8_appeal_strategy(
                         context, outputs.get(1, {}), outputs[6], outputs[7],
                         config, self.llm_client, tenant_id, run_id_str,
+                        persona_id=persona_id,
                     )
                 elif sn == 9:
                     out = await stage9_story_structure(
                         outputs.get(1, {}), outputs[7], outputs[8],
                         config, self.llm_client, tenant_id, run_id_str,
+                        persona_id=persona_id,
                     )
                 elif sn == 10:
                     out = await stage10_page_generation(
@@ -396,6 +405,7 @@ class ProposalPipelineService:
                         outputs.get(7, {}), outputs.get(8, {}), outputs[9],
                         config, self.llm_client, db,
                         tenant_id, user_id, run_id_str, minute_id,
+                        persona_id=persona_id,
                     )
 
                 outputs[sn] = out

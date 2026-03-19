@@ -22,6 +22,7 @@ class PipelineRequest(BaseModel):
     minute_id: UUID
     area: str = Field(default="", description="Optional area filter")
     industry: str = Field(default="", description="Optional industry filter")
+    persona_id: UUID | None = Field(default=None, description="Optional persona ID for persona-aware generation")
 
 
 class PipelineRunResponse(BaseModel):
@@ -61,6 +62,7 @@ async def stream_pipeline(
             tenant_id=tenant_id,
             user_id=user_id,
             db=db,
+            persona_id=str(request.persona_id) if request.persona_id else None,
         ),
         media_type="text/event-stream",
         headers={
@@ -87,6 +89,7 @@ async def generate_pipeline(
         tenant_id=tenant_id,
         user_id=user_id,
         db=db,
+        persona_id=str(request.persona_id) if request.persona_id else None,
     )
 
     if "error" in result:

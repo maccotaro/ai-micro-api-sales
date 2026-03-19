@@ -69,6 +69,10 @@ class ProposalChatRequest(BaseModel):
         None,
         description="雇用形態フィルタ（例: アルバイト・パート、正社員）",
     )
+    persona_id: Optional[UUID] = Field(
+        None,
+        description="ペルソナID（ペルソナベース提案生成用）",
+    )
 
 
 class ProposalResponse(BaseModel):
@@ -144,6 +148,7 @@ async def stream_proposal_chat(
             prefecture=request.prefecture,
             job_category=request.job_category,
             employment_type=request.employment_type,
+            persona_id=str(request.persona_id) if request.persona_id else None,
         ),
         media_type="text/event-stream",
         headers={
@@ -189,6 +194,7 @@ async def generate_proposal(
             prefecture=request.prefecture,
             job_category=request.job_category,
             employment_type=request.employment_type,
+            persona_id=str(request.persona_id) if request.persona_id else None,
         )
 
         return ProposalResponse(
