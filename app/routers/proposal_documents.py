@@ -1,5 +1,6 @@
 """Router for proposal document CRUD, chat, and export endpoints."""
 import logging
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -71,6 +72,22 @@ class ChatMessageResponse(BaseModel):
     action_type: Optional[str] = None
     resulted_in_update: bool = False
     created_at: str
+
+
+class PageUpdateItem(BaseModel):
+    page_number: int
+    markdown_content: str
+
+
+class DocumentUpdateRequest(BaseModel):
+    pages: list[PageUpdateItem]
+
+
+class DocumentUpdateResponse(BaseModel):
+    id: str
+    changed_pages: list[int]
+    is_significant: bool
+    persona_id: Optional[str] = None
 
 
 class ExportRequest(BaseModel):
@@ -194,6 +211,74 @@ async def delete_document(
 
     db.delete(doc)
     db.commit()
+
+
+# ============================================================
+# Update pages (inline editor save)
+# ============================================================
+
+@router.put("/{document_id}")
+async def update_document_pages(
+    document_id: UUID,
+    req: DocumentUpdateRequest,
+    current_user: dict = Depends(require_sales_access),
+    db: Session = Depends(get_db),
+):
+    """Update proposal document pages and detect diffs for persona learning."""
+    tenant_id, user_id = _extract_ids(current_user)
+
+    doc = db.query(ProposalDocument).options(
+        joinedload(ProposalDocument.pages),
+    ).filter(
+        ProposalDocument.id == document_id,
+        ProposalDocument.tenant_id == tenant_id,
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Build lookup of existing pages
+    existing = {p.page_number: p for p in doc.pages}
+    changed_pages: list[int] = []
+
+    for update in req.pages:
+        page = existing.get(update.page_number)
+        if not page:
+            continue
+        original = (page.markdown_content or "").strip()
+        modified = update.markdown_content.strip()
+        if original != modified:
+            changed_pages.append(update.page_number)
+            page.markdown_content = update.markdown_content
+            page.updated_at = datetime.utcnow()
+
+    if changed_pages:
+        doc.updated_at = datetime.utcnow()
+
+    is_significant = len(changed_pages) >= 3
+
+    # Look up persona_id from the pipeline run
+    from app.services.proposal_diff_service import (
+        get_persona_id_for_document, build_diff_data, trigger_pattern_extraction,
+    )
+    persona_id = await get_persona_id_for_document(doc, db)
+
+    db.commit()
+
+    # Trigger pattern extraction if significant and persona exists
+    if is_significant and persona_id:
+        diff_data = build_diff_data(doc, existing, req.pages, changed_pages)
+        await trigger_pattern_extraction(
+            persona_id, str(user_id), str(document_id),
+            str(doc.pipeline_run_id) if doc.pipeline_run_id else None,
+            str(tenant_id), diff_data,
+        )
+
+    return DocumentUpdateResponse(
+        id=str(doc.id),
+        changed_pages=changed_pages,
+        is_significant=is_significant,
+        persona_id=persona_id,
+    ).model_dump()
 
 
 # ============================================================

@@ -99,6 +99,8 @@ class ProposalPipelineService:
         })
 
         stage_results = {}
+        if persona_id:
+            stage_results["_meta"] = {"persona_id": persona_id}
         context = None
         run_id = None
 
