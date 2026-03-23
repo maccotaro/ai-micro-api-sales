@@ -26,42 +26,70 @@ def _build_marp_markdown(doc: ProposalDocument) -> str:
     title = (doc.title or "提案書").replace('"', '\\"')
     frontmatter = f"""---
 marp: true
+html: true
 theme: {theme}
 paginate: true
 size: 16:9
 footer: "{title}"
 style: |
   section {{
+    font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'YuGothic', sans-serif;
     font-size: 14px;
     line-height: 1.4;
     padding: 30px 50px;
     overflow: hidden;
   }}
+  section.lead {{
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+    color: white;
+    text-align: center;
+    justify-content: center;
+  }}
+  section.lead h1 {{
+    color: #60a5fa;
+    font-size: 36px;
+    margin-bottom: 0.3em;
+    border: none;
+  }}
+  section.lead h2 {{
+    color: #94a3b8;
+    font-size: 20px;
+    border: none;
+  }}
+  section.lead p {{
+    color: #cbd5e1;
+  }}
   h1 {{
-    font-size: 30px;
-    color: #1a365d;
-    border-bottom: 3px solid #3182ce;
+    color: #1e3a5f;
+    font-size: 28px;
+    border-bottom: 3px solid #3b82f6;
     padding-bottom: 8px;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }}
   h2 {{
-    font-size: 22px;
-    color: #2d3748;
-    margin-top: 10px;
-    margin-bottom: 8px;
+    color: #1e40af;
+    font-size: 20px;
+    border-bottom: 2px solid #93c5fd;
+    padding-bottom: 4px;
+    margin-top: 8px;
+    margin-bottom: 6px;
   }}
   h3 {{
     font-size: 16px;
-    color: #4a5568;
+    color: #334155;
+  }}
+  strong {{
+    color: #dc2626;
   }}
   table {{
-    font-size: 14px;
+    font-size: 13px;
     width: 100%;
     border-collapse: collapse;
-    margin: 8px 0;
+    margin: 6px 0;
   }}
   th {{
-    background: #edf2f7;
+    background: #1e3a5f;
+    color: white;
     padding: 5px 10px;
     text-align: left;
     font-weight: 600;
@@ -70,34 +98,44 @@ style: |
     padding: 4px 10px;
     border-bottom: 1px solid #e2e8f0;
   }}
+  section:not(.lead) tr:nth-child(even) td {{
+    background: #f8fafc;
+  }}
   ul, ol {{
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1.5;
     margin: 6px 0;
   }}
   blockquote {{
-    border-left: 4px solid #3182ce;
-    background: #ebf8ff;
+    border-left: 4px solid #3b82f6;
+    background: #eff6ff;
     padding: 8px 12px;
     margin: 8px 0;
-    font-size: 14px;
-    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    border-radius: 0 6px 6px 0;
+    color: #475569;
   }}
-  strong {{
-    color: #2b6cb0;
+  code {{
+    background: #f1f5f9;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
   }}
   footer {{
-    font-size: 11px;
-    color: #a0aec0;
+    font-size: 10px;
+    color: #94a3b8;
   }}
 ---
 
 """
     pages_sorted = sorted(doc.pages, key=lambda p: p.page_number)
-    page_markdowns = [
-        _strip_marp_separators(fix_markdown_tables(p.markdown_content or ""))
-        for p in pages_sorted
-    ]
+    page_markdowns = []
+    for i, p in enumerate(pages_sorted):
+        md = _strip_marp_separators(fix_markdown_tables(p.markdown_content or ""))
+        if i == 0:
+            # Apply lead class to first page (cover slide)
+            md = "<!-- _class: lead -->\n<!-- _footer: \"\" -->\n\n" + md
+        page_markdowns.append(md)
     return frontmatter + "\n\n---\n\n".join(page_markdowns)
 
 
