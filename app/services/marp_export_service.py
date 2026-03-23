@@ -32,61 +32,62 @@ size: 16:9
 footer: "{title}"
 style: |
   section {{
-    font-size: 18px;
-    padding: 40px 60px;
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 30px 50px;
     overflow: hidden;
   }}
   h1 {{
-    font-size: 36px;
+    font-size: 30px;
     color: #1a365d;
     border-bottom: 3px solid #3182ce;
-    padding-bottom: 12px;
-    margin-bottom: 20px;
+    padding-bottom: 8px;
+    margin-bottom: 14px;
   }}
   h2 {{
-    font-size: 28px;
+    font-size: 22px;
     color: #2d3748;
-    margin-top: 16px;
-    margin-bottom: 12px;
+    margin-top: 10px;
+    margin-bottom: 8px;
   }}
   h3 {{
-    font-size: 18px;
+    font-size: 16px;
     color: #4a5568;
   }}
   table {{
-    font-size: 18px;
+    font-size: 14px;
     width: 100%;
     border-collapse: collapse;
-    margin: 12px 0;
+    margin: 8px 0;
   }}
   th {{
     background: #edf2f7;
-    padding: 8px 12px;
+    padding: 5px 10px;
     text-align: left;
     font-weight: 600;
   }}
   td {{
-    padding: 6px 12px;
+    padding: 4px 10px;
     border-bottom: 1px solid #e2e8f0;
   }}
   ul, ol {{
-    font-size: 20px;
-    line-height: 1.6;
-    margin: 8px 0;
+    font-size: 15px;
+    line-height: 1.5;
+    margin: 6px 0;
   }}
   blockquote {{
     border-left: 4px solid #3182ce;
     background: #ebf8ff;
-    padding: 12px 16px;
-    margin: 12px 0;
-    font-size: 18px;
+    padding: 8px 12px;
+    margin: 8px 0;
+    font-size: 14px;
     border-radius: 0 8px 8px 0;
   }}
   strong {{
     color: #2b6cb0;
   }}
   footer {{
-    font-size: 12px;
+    font-size: 11px;
     color: #a0aec0;
   }}
 ---

@@ -272,10 +272,10 @@ async def stage10_page_generation(
         markdown = fix_markdown_tables(result.get("response", ""))
         line_count = len([l for l in markdown.strip().split("\n") if l.strip()])
 
-        if line_count > 16:
+        if line_count > 28:
             # Too long: ask LLM to split into 2 pages
             split_msgs = [
-                {"role": "system", "content": f"以下のスライド内容を2ページに分割してください。各ページは10行以内に収めてください。ページ区切りは「---PAGE_BREAK---」で示してください。\n\n{markdown}"},
+                {"role": "system", "content": f"以下のスライド内容を2ページに分割してください。各ページは16行以内に収めてください。ページ区切りは「---PAGE_BREAK---」で示してください。\n\n{markdown}"},
                 {"role": "user", "content": "2ページに分割してください。"},
             ]
             split_result = await _call_page_llm(split_msgs)
@@ -295,11 +295,11 @@ async def stage10_page_generation(
                 generated_pages.append(extra_page)
             else:
                 markdown = split_text
-        elif line_count > 12:
+        elif line_count > 20:
             # Slightly over: ask LLM to condense
             condense_msgs = [
-                {"role": "system", "content": f"以下のスライド内容を10行以内に要約してください。重要な数値やキーポイントは残してください。\n\n{markdown}"},
-                {"role": "user", "content": "10行以内に要約してください。"},
+                {"role": "system", "content": f"以下のスライド内容を16行以内に要約してください。重要な数値やキーポイントは残してください。\n\n{markdown}"},
+                {"role": "user", "content": "16行以内に要約してください。"},
             ]
             condense_result = await _call_page_llm(condense_msgs)
             markdown = fix_markdown_tables(condense_result.get("response", markdown))
