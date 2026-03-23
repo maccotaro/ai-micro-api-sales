@@ -20,7 +20,7 @@ from app.models.proposal_document import (
 from app.services.llm_client import LLMClient
 from app.services.pipeline_config import PipelineConfigData
 from app.core.model_settings_client import get_chat_num_ctx
-from app.services.pipeline_stages import _search_kbs, _call_llm
+from app.services.pipeline_stages import _search_kbs, _call_llm, _build_issues_summary
 from app.services.pipeline_helpers import parse_json_response
 from app.services.proposal_pipeline_prompts import (
     build_stage7_prompt, build_stage8_prompt,
@@ -66,7 +66,8 @@ async def stage6_proposal_context(
             "target_psychology_decision_maker",
         )
     }
-    kb_results = await _search_kbs(stage6_categories, meeting, tenant_id)
+    issues_sum = _build_issues_summary(stage1_output, meeting)
+    kb_results = await _search_kbs(stage6_categories, meeting, tenant_id, issues_summary=issues_sum)
 
     # Success case embeddings
     success_cases = await load_success_cases(

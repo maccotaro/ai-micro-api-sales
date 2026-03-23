@@ -95,6 +95,17 @@ async def stage0_collect_context(
     }
 
 
+def _build_issues_summary(stage1_output: dict, meeting_data: dict) -> str:
+    """Build a natural language summary of Stage 1 issues for KB search queries."""
+    issues = stage1_output.get("issues", [])
+    if not issues:
+        return ""
+    industry = meeting_data.get("industry", "")
+    area = meeting_data.get("area", "")
+    titles = "、".join(issue.get("title", "") for issue in issues[:3])
+    return f"{area}の{industry}における課題: {titles}"
+
+
 # ============================================================
 # Stage 1-5: LLM Stages
 # ============================================================
@@ -146,7 +157,8 @@ async def stage2_reverse_planning(
     stage_cfg = config.get_stage(2)
     kb_cats = config.get_kb_categories_for_stage(2)
     search_tid = context.get("search_tenant_id", tenant_id)
-    kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid)
+    issues_sum = _build_issues_summary(stage1_output, context["meeting"])
+    kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid, issues_summary=issues_sum)
     _merge_kb_results(context["kb_results"], kb_results)
 
     # Check stage config flags for optional data inclusion
@@ -193,7 +205,8 @@ async def stage3_action_plan(
     stage_cfg = config.get_stage(3)
     kb_cats = config.get_kb_categories_for_stage(3)
     search_tid = context.get("search_tenant_id", tenant_id)
-    kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid)
+    issues_sum = _build_issues_summary(stage1_output, context["meeting"])
+    kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid, issues_summary=issues_sum)
 
     prompt = STAGE3_SYSTEM_PROMPT.format(
         stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2)[:1500],
@@ -219,7 +232,8 @@ async def stage4_ad_copy(
     stage_cfg = config.get_stage(4)
     kb_cats = config.get_kb_categories_for_stage(4)
     search_tid = context.get("search_tenant_id", tenant_id)
-    kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid)
+    issues_sum = _build_issues_summary(stage1_output, context["meeting"])
+    kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid, issues_summary=issues_sum)
 
     catchcopy_count = stage_cfg.catchcopy_count or 5 if stage_cfg.generate_catchcopy is not False else 0
     prompt = STAGE4_SYSTEM_PROMPT.format(
@@ -318,8 +332,14 @@ async def _search_kbs(
     categories: dict[str, KBMappingCategory],
     meeting_data: dict,
     tenant_id: UUID,
+    issues_summary: str = "",
 ) -> dict[str, list[str]]:
-    """Search KBs for all categories in parallel."""
+    """Search KBs for all categories in parallel.
+
+    Args:
+        issues_summary: Natural language summary of Stage 1 issues.
+            Injected into query template via {issues} variable.
+    """
     if not categories:
         return {}
 
@@ -330,9 +350,9 @@ async def _search_kbs(
         query = cat.search_query_template.format(
             industry=meeting_data.get("industry", ""),
             media_name=meeting_data.get("company_name", ""),
-
             area=meeting_data.get("area", ""),
             month=datetime.now().month,
+            issues=issues_summary,
         )
 
         chunks = []
