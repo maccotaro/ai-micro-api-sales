@@ -100,10 +100,8 @@ def _build_issues_summary(stage1_output: dict, meeting_data: dict) -> str:
     issues = stage1_output.get("issues", [])
     if not issues:
         return ""
-    industry = meeting_data.get("industry", "")
-    area = meeting_data.get("area", "")
     titles = "、".join(issue.get("title", "") for issue in issues[:3])
-    return f"{area}の{industry}における課題: {titles}"
+    return titles
 
 
 # ============================================================
