@@ -27,9 +27,9 @@ def format_context_summary(context: dict) -> str:
 
     kb_results = context.get("kb_results", {})
     if kb_results:
-        lines.append("### ナレッジベース検索結果")
+        lines.append("### ナレッジベース検索結果 `[KB]`")
         for cat_name, chunks in kb_results.items():
-            lines.append(f"\n**{cat_name}** ({len(chunks)}件)")
+            lines.append(f"\n**{cat_name}** ({len(chunks)}件) `[KB]`")
             for i, chunk in enumerate(chunks, 1):
                 # Truncate long chunks for readability
                 text = chunk.strip().replace("\n", " ")
@@ -40,7 +40,7 @@ def format_context_summary(context: dict) -> str:
 
     products = context.get("product_data", [])
     if products:
-        lines.append(f"### 商品データ: {len(products)}件")
+        lines.append(f"### 商品データ: {len(products)}件 `[DB]`")
         for p in products:
             media = p.get("media_name", "")
             prod = p.get("product_name", "")
@@ -53,7 +53,7 @@ def format_context_summary(context: dict) -> str:
 
     pub_data = context.get("publication_data", [])
     if pub_data:
-        lines.append(f"### 前回掲載実績: {len(pub_data)}件")
+        lines.append(f"### 前回掲載実績: {len(pub_data)}件 `[DB]`")
         for rec in pub_data:
             plan = rec.get("plan_category", "")
             pref = rec.get("prefecture", "")
@@ -66,7 +66,7 @@ def format_context_summary(context: dict) -> str:
 
     campaigns = context.get("campaign_data", [])
     if campaigns:
-        lines.append(f"### キャンペーン情報: {len(campaigns)}件")
+        lines.append(f"### キャンペーン情報: {len(campaigns)}件 `[DB]`")
         for c in campaigns:
             name = c.get("name", "")
             end = c.get("end_date", "")
@@ -78,9 +78,9 @@ def format_context_summary(context: dict) -> str:
     sim = context.get("simulation_data", [])
     wage = context.get("wage_data", [])
     if sim:
-        lines.append(f"### シミュレーションパラメータ: {len(sim)}件")
+        lines.append(f"### シミュレーションパラメータ: {len(sim)}件 `[DB]`")
     if wage:
-        lines.append(f"### 地域別時給データ: {len(wage)}件")
+        lines.append(f"### 地域別時給データ: {len(wage)}件 `[DB]`")
 
     return "\n".join(lines)
 
