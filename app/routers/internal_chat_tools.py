@@ -109,14 +109,12 @@ def search_meeting_minutes(
 
     results = []
     for m in minutes:
+        date_str = m.meeting_date.isoformat() if m.meeting_date else "N/A"
         results.append({
-            "id": str(m.id),
-            "date": m.meeting_date.isoformat() if m.meeting_date else None,
-            "customer_name": m.company_name,
-            "title": f"{m.company_name} - {m.meeting_date.isoformat() if m.meeting_date else 'N/A'}",
-            "summary": _extract_summary(m.parsed_json),
-            "action_items": _extract_action_items(m.parsed_json),
-            "attendees": m.attendees,
+            "minute_id": str(m.id),
+            "customer": m.company_name,
+            "date": date_str,
+            "summary": _extract_summary(m.parsed_json) or "未記入",
         })
 
     return {"results": results, "total": total}

@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.core.config import settings
-from app.routers import meeting_minutes, proposals, simulation, health, search, graph, chat, pricing, proposal_chat, proposal_pipeline, proposal_documents, internal_chat_tools
+from app.routers import meeting_minutes, proposals, simulation, health, search, graph, chat, pricing, proposal_chat, proposal_pipeline, proposal_documents, internal_chat_tools, internal_proposal_pipeline
 from app.services.graph import neo4j_client
 
 # Configure logging
@@ -62,6 +62,7 @@ app.include_router(proposal_chat.router, prefix="/api/sales")
 app.include_router(proposal_pipeline.router, prefix="/api/sales")
 app.include_router(proposal_documents.router, prefix="/api/sales")
 app.include_router(internal_chat_tools.router, prefix="/internal/chat-tools")
+app.include_router(internal_proposal_pipeline.router, prefix="/internal")
 
 
 # Global exception handler

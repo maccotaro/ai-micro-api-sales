@@ -178,6 +178,21 @@ ai-micro-api-sales/
 | GET | `/stats` | テナントのグラフ統計情報 |
 | DELETE | `/meetings/{minute_id}` | 議事録関連グラフデータ削除 |
 
+### 内部API: 提案パイプライン (`/internal/proposal-pipeline`) ★Phase 4
+
+Agent Loop (api-admin) から呼び出される内部API。`X-Internal-Secret` 認証。
+
+| メソッド | パス | 説明 |
+|---------|------|------|
+| POST | `/proposal-pipeline/trigger` | パイプライン実行（同期、30-120秒） |
+| GET | `/proposal-pipeline/runs/{run_id}` | ステータス確認 |
+| POST | `/meeting-minutes/{id}/analyze` | 議事録AI解析 |
+| POST | `/search/meetings` | 類似議事録ベクトル検索 |
+| GET | `/graph/recommendations/{minute_id}` | グラフベース推薦 |
+
+**ルーター**: `app/routers/internal_proposal_pipeline.py`
+**認証**: `X-Internal-Secret` ヘッダー（`INTERNAL_API_SECRET` 環境変数）
+
 ## 商材提案チャット（9段階ハイブリッド検索）
 
 ### 概要

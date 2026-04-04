@@ -82,6 +82,7 @@ class ProposalPipelineService:
         user_id: UUID,
         db: Session,
         persona_id: Optional[str] = None,
+        run_id: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """Execute pipeline with SSE event streaming."""
         pipeline_start = time.time()
@@ -140,8 +141,9 @@ class ProposalPipelineService:
                 yield sse_event("error", {"message": "Stage 0 is disabled but required"})
                 return
 
-            # Create pipeline run record
-            run_id = await self._create_run(tenant_id, user_id, minute_id)
+            # Create pipeline run record (skip if already provided by caller)
+            if not run_id:
+                run_id = await self._create_run(tenant_id, user_id, minute_id)
 
             # Stages 1-5
             outputs = {}
@@ -283,11 +285,13 @@ class ProposalPipelineService:
         user_id: UUID,
         db: Session,
         persona_id: Optional[str] = None,
+        run_id: Optional[str] = None,
     ) -> dict:
         """Execute pipeline and return complete JSON result."""
         result = {}
         async for event_str in self.stream_pipeline(
-            minute_id, tenant_id, user_id, db, persona_id=persona_id
+            minute_id, tenant_id, user_id, db,
+            persona_id=persona_id, run_id=run_id,
         ):
             # Parse SSE to extract result event
             if event_str.startswith("data: "):
