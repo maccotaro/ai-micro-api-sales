@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     # Redis
     redis_url: str = "redis://:password@localhost:6379"
+    redis_sm_db: int = 3  # SharedMemory Redis database
 
     # Authentication
     auth_service_url: str = "http://localhost:8002"

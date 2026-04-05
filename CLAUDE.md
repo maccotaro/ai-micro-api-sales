@@ -123,6 +123,21 @@ ai-micro-api-sales/
 
 **設定:** テナント別パイプライン設定は api-admin の `GET /internal/proposal-pipeline/config` 経由で取得、Redisキャッシュ TTL 300秒
 
+### SharedMemory + MessageBus (Redis db/3)
+
+提案パイプラインのパフォーマンス改善:
+
+- **ステージ間データ共有**: SharedMemory に構造化 JSON で保存、後続ステージは要約のみ LLM に渡す
+- **途中再開 (Resume)**: `resume_run_id` パラメータで失敗ステージから再開可能（SharedMemory TTL 2時間以内）
+- **進捗配信**: MessageBus でステージ開始/完了/失敗イベントを publish
+
+**ファイル:**
+- `app/services/shared_memory.py` - Redis KV ラッパー
+- `app/services/message_bus.py` - Redis Pub/Sub ラッパー
+- `app/services/pipeline_memory.py` - パイプライン専用ヘルパー
+
+**設定**: `REDIS_SM_DB=3` 環境変数
+
 **ファイル:**
 - `app/services/pipeline_config.py` - 設定取得 + Redisキャッシュ
 - `app/services/pipeline_prompts.py` - Stage 1-5 プロンプトテンプレート

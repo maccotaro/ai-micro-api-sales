@@ -23,6 +23,7 @@ class PipelineRequest(BaseModel):
     area: str = Field(default="", description="Optional area filter")
     industry: str = Field(default="", description="Optional industry filter")
     persona_id: UUID | None = Field(default=None, description="Optional persona ID for persona-aware generation")
+    resume_run_id: str | None = Field(default=None, description="Resume a previous pipeline run from where it left off")
 
 
 class PipelineRunResponse(BaseModel):
@@ -63,6 +64,7 @@ async def stream_pipeline(
             user_id=user_id,
             db=db,
             persona_id=str(request.persona_id) if request.persona_id else None,
+            resume_run_id=request.resume_run_id,
         ),
         media_type="text/event-stream",
         headers={
@@ -90,6 +92,7 @@ async def generate_pipeline(
         user_id=user_id,
         db=db,
         persona_id=str(request.persona_id) if request.persona_id else None,
+        resume_run_id=request.resume_run_id,
     )
 
     if "error" in result:

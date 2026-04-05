@@ -30,6 +30,7 @@ from app.services.pipeline_prompts import (
     STAGE5_SYSTEM_PROMPT,
     build_kb_context_block,
 )
+from app.services.pipeline_memory import extract_stage_summary
 
 logger = logging.getLogger(__name__)
 
@@ -172,8 +173,10 @@ async def stage2_reverse_planning(
     seasonal_chunks = context.get("kb_results", {}).get("seasonal_knowledge", [])
     seasonal_text = _build_seasonal_text(seasonal_chunks, current_month)
 
+    # Use concise summary for LLM prompt instead of full JSON
+    stage1_summary = extract_stage_summary(1, stage1_output, max_chars=1500)
     prompt = STAGE2_SYSTEM_PROMPT.format(
-        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2)[:2000],
+        stage1_output=stage1_summary or json.dumps(stage1_output, ensure_ascii=False, indent=2)[:2000],
         kb_context=build_kb_context_block(kb_results),
         product_data=json.dumps(context["product_data"][:5], ensure_ascii=False, indent=2)[:1500],
         simulation_data=json.dumps(sim_data[:3], ensure_ascii=False, indent=2)[:800],
@@ -206,9 +209,11 @@ async def stage3_action_plan(
     issues_sum = _build_issues_summary(stage1_output, context["meeting"])
     kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid, issues_summary=issues_sum)
 
+    stage1_summary = extract_stage_summary(1, stage1_output, max_chars=1000)
+    stage2_summary = extract_stage_summary(2, stage2_output, max_chars=1500)
     prompt = STAGE3_SYSTEM_PROMPT.format(
-        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2)[:1500],
-        stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2)[:2000],
+        stage1_output=stage1_summary or json.dumps(stage1_output, ensure_ascii=False, indent=2)[:1500],
+        stage2_output=stage2_summary or json.dumps(stage2_output, ensure_ascii=False, indent=2)[:2000],
         kb_context=build_kb_context_block(kb_results),
         company_name=context["meeting"].get("company_name", ""),
     )
@@ -234,9 +239,11 @@ async def stage4_ad_copy(
     kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid, issues_summary=issues_sum)
 
     catchcopy_count = stage_cfg.catchcopy_count or 5 if stage_cfg.generate_catchcopy is not False else 0
+    stage1_summary = extract_stage_summary(1, stage1_output, max_chars=1000)
+    stage2_summary = extract_stage_summary(2, stage2_output, max_chars=1500)
     prompt = STAGE4_SYSTEM_PROMPT.format(
-        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2)[:1500],
-        stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2)[:2000],
+        stage1_output=stage1_summary or json.dumps(stage1_output, ensure_ascii=False, indent=2)[:1500],
+        stage2_output=stage2_summary or json.dumps(stage2_output, ensure_ascii=False, indent=2)[:2000],
         kb_context=build_kb_context_block(kb_results),
         catchcopy_count=catchcopy_count,
         meeting_text=context["meeting"]["raw_text"][:2000],
@@ -264,11 +271,15 @@ async def stage5_checklist_summary(
     reference_chunks = context.get("kb_results", {}).get("reference_materials", [])
     doc_links_text = _build_document_links_text(reference_chunks)
 
+    stage1_summary = extract_stage_summary(1, stage1_output, max_chars=800)
+    stage2_summary = extract_stage_summary(2, stage2_output, max_chars=1000)
+    stage3_summary = extract_stage_summary(3, stage3_output, max_chars=1000)
+    stage4_summary = extract_stage_summary(4, stage4_output, max_chars=800) if stage4_output else stage4_text
     prompt = STAGE5_SYSTEM_PROMPT.format(
-        stage1_output=json.dumps(stage1_output, ensure_ascii=False, indent=2)[:1500],
-        stage2_output=json.dumps(stage2_output, ensure_ascii=False, indent=2)[:2000],
-        stage3_output=json.dumps(stage3_output, ensure_ascii=False, indent=2)[:1500],
-        stage4_output=stage4_text[:1500],
+        stage1_output=stage1_summary or json.dumps(stage1_output, ensure_ascii=False, indent=2)[:1500],
+        stage2_output=stage2_summary or json.dumps(stage2_output, ensure_ascii=False, indent=2)[:2000],
+        stage3_output=stage3_summary or json.dumps(stage3_output, ensure_ascii=False, indent=2)[:1500],
+        stage4_output=stage4_summary[:1500],
         meeting_text=context["meeting"]["raw_text"][:2000],
         document_links=doc_links_text[:1000],
     )
