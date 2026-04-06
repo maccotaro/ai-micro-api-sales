@@ -201,6 +201,9 @@ class ProposalPipelineService:
                         pipeline_run_id=run_id,
                         persona_id=persona_id,
                         shared_memory=shared_memory,
+                        user_id=user_id,
+                        user_roles=user_roles,
+                        user_clearance_level=user_clearance_level,
                     )
                     outputs[stage_num] = output
                     duration = int((time.time() - t0) * 1000)
@@ -351,10 +354,17 @@ class ProposalPipelineService:
         config: PipelineConfigData, tenant_id: UUID,
         pipeline_run_id: Optional[str] = None,
         persona_id: Optional[str] = None, shared_memory=None,
+        user_id: Optional[UUID] = None,
+        user_roles: Optional[list[str]] = None,
+        user_clearance_level: Optional[str] = None,
     ) -> dict:
         """Execute a single LLM stage (1-5)."""
         rid = str(pipeline_run_id) if pipeline_run_id else None
-        kw = dict(pipeline_run_id=rid, persona_id=persona_id)
+        kw = dict(
+            pipeline_run_id=rid, persona_id=persona_id,
+            user_id=user_id, user_roles=user_roles,
+            user_clearance_level=user_clearance_level,
+        )
         s1, s2, s3, s4 = prev.get(1, {}), prev.get(2, {}), prev.get(3, {}), prev.get(4)
         if stage_num == 1:
             return await stage1_issue_structuring(context, config, self.llm_client, tenant_id, **kw)

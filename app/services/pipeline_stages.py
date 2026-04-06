@@ -119,6 +119,9 @@ async def stage1_issue_structuring(
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
     persona_id: Optional[str] = None,
+    user_id: Optional[UUID] = None,
+    user_roles: Optional[list[str]] = None,
+    user_clearance_level: Optional[str] = None,
 ) -> dict:
     """Stage 1: Extract and structure issues with BANT-C analysis.
 
@@ -130,7 +133,10 @@ async def stage1_issue_structuring(
     stage_cfg = config.get_stage(1)
     kb_cats = config.get_kb_categories_for_stage(1)
     search_tid = context.get("search_tenant_id", tenant_id)
-    kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid)
+    kb_results = await _search_kbs(
+        kb_cats, context["meeting"], search_tid, user_id=user_id,
+        user_roles=user_roles, user_clearance_level=user_clearance_level,
+    )
     _merge_kb_results(context["kb_results"], kb_results)
 
     prompt = STAGE1_SYSTEM_PROMPT.format(
@@ -155,13 +161,19 @@ async def stage2_reverse_planning(
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
     persona_id: Optional[str] = None,
+    user_id: Optional[UUID] = None,
+    user_roles: Optional[list[str]] = None,
+    user_clearance_level: Optional[str] = None,
 ) -> dict:
     """Stage 2: Reverse-calculation planning with DB data."""
     stage_cfg = config.get_stage(2)
     kb_cats = config.get_kb_categories_for_stage(2)
     search_tid = context.get("search_tenant_id", tenant_id)
     issues_sum = _build_issues_summary(stage1_output, context["meeting"])
-    kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid, issues_summary=issues_sum)
+    kb_results = await _search_kbs(
+        kb_cats, context["meeting"], search_tid, issues_summary=issues_sum,
+        user_id=user_id, user_roles=user_roles, user_clearance_level=user_clearance_level,
+    )
     _merge_kb_results(context["kb_results"], kb_results)
 
     # Check stage config flags for optional data inclusion
@@ -205,13 +217,19 @@ async def stage3_action_plan(
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
     persona_id: Optional[str] = None,
+    user_id: Optional[UUID] = None,
+    user_roles: Optional[list[str]] = None,
+    user_clearance_level: Optional[str] = None,
 ) -> dict:
     """Stage 3: Detailed action plan generation."""
     stage_cfg = config.get_stage(3)
     kb_cats = config.get_kb_categories_for_stage(3)
     search_tid = context.get("search_tenant_id", tenant_id)
     issues_sum = _build_issues_summary(stage1_output, context["meeting"])
-    kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid, issues_summary=issues_sum)
+    kb_results = await _search_kbs(
+        kb_cats, context["meeting"], search_tid, issues_summary=issues_sum,
+        user_id=user_id, user_roles=user_roles, user_clearance_level=user_clearance_level,
+    )
 
     stage1_summary = extract_stage_summary(1, stage1_output, max_chars=1000)
     stage2_summary = extract_stage_summary(2, stage2_output, max_chars=1500)
@@ -234,13 +252,19 @@ async def stage4_ad_copy(
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
     persona_id: Optional[str] = None,
+    user_id: Optional[UUID] = None,
+    user_roles: Optional[list[str]] = None,
+    user_clearance_level: Optional[str] = None,
 ) -> dict:
     """Stage 4: Ad copy / draft proposal generation."""
     stage_cfg = config.get_stage(4)
     kb_cats = config.get_kb_categories_for_stage(4)
     search_tid = context.get("search_tenant_id", tenant_id)
     issues_sum = _build_issues_summary(stage1_output, context["meeting"])
-    kb_results = await _search_kbs(kb_cats, context["meeting"], search_tid, issues_summary=issues_sum)
+    kb_results = await _search_kbs(
+        kb_cats, context["meeting"], search_tid, issues_summary=issues_sum,
+        user_id=user_id, user_roles=user_roles, user_clearance_level=user_clearance_level,
+    )
 
     catchcopy_count = stage_cfg.catchcopy_count or 5 if stage_cfg.generate_catchcopy is not False else 0
     stage1_summary = extract_stage_summary(1, stage1_output, max_chars=1000)

@@ -65,6 +65,8 @@ async def stream_pipeline(
             db=db,
             persona_id=str(request.persona_id) if request.persona_id else None,
             resume_run_id=request.resume_run_id,
+            user_roles=current_user.get("roles", []),
+            user_clearance_level=current_user.get("clearance_level", "internal"),
         ),
         media_type="text/event-stream",
         headers={
@@ -93,6 +95,8 @@ async def generate_pipeline(
         db=db,
         persona_id=str(request.persona_id) if request.persona_id else None,
         resume_run_id=request.resume_run_id,
+        user_roles=current_user.get("roles", []),
+        user_clearance_level=current_user.get("clearance_level", "internal"),
     )
 
     if "error" in result:
