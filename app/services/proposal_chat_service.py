@@ -46,6 +46,7 @@ class ProposalChatService:
         tenant_id: UUID,
         top_k: int = 10,
         pipeline_version: Optional[str] = None,
+        user_id: Optional[UUID] = None,
     ) -> List[Dict[str, Any]]:
         """api-ragの9段階ハイブリッド検索パイプラインで商材ドキュメントを検索。"""
         search_url = f"{self.rag_service_url}/internal/v1/search/hybrid"
@@ -59,6 +60,8 @@ class ProposalChatService:
                     "top_k": top_k,
                     "enable_graph": True,  # GraphRAG有効化
                 }
+                if user_id:
+                    search_json["user_id"] = str(user_id)
                 if pipeline_version:
                     search_json["pipeline_version"] = pipeline_version
 

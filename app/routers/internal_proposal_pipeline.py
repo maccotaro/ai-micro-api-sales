@@ -40,6 +40,12 @@ class TriggerPipelineRequest(BaseModel):
     minute_id: UUID
     tenant_id: UUID
     user_id: UUID
+    roles: Optional[list[str]] = Field(
+        default=None, description="User roles for access control"
+    )
+    clearance_level: Optional[str] = Field(
+        default=None, description="User clearance level for confidentiality filtering"
+    )
     persona_id: Optional[str] = Field(
         default=None, description="Optional persona UUID"
     )
@@ -122,6 +128,8 @@ async def trigger_pipeline(
                 db=bg_db,
                 persona_id=request.persona_id,
                 run_id=str(run_id) if run_id else None,
+                user_roles=request.roles,
+                user_clearance_level=request.clearance_level,
             )
         except Exception as e:
             logger.error("Background pipeline failed: %s", e, exc_info=True)

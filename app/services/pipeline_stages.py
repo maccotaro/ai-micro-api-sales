@@ -43,6 +43,9 @@ async def stage0_collect_context(
     tenant_id: UUID,
     config: PipelineConfigData,
     db: Session,
+    user_id: Optional[UUID] = None,
+    user_roles: Optional[list[str]] = None,
+    user_clearance_level: Optional[str] = None,
 ) -> dict:
     """Collect all context needed by subsequent stages."""
     # 1. Load meeting minute
@@ -73,7 +76,8 @@ async def stage0_collect_context(
     # 2. KB searches (parallel per category)
     kb_categories = config.get_kb_categories_for_stage(0)
     kb_results = await _search_kbs(
-        kb_categories, meeting_data, search_tenant_id
+        kb_categories, meeting_data, search_tenant_id, user_id=user_id,
+        user_roles=user_roles, user_clearance_level=user_clearance_level,
     )
 
     # 3. Load DB data (products, simulation, wages, publications, campaigns)
@@ -342,6 +346,9 @@ async def _search_kbs(
     meeting_data: dict,
     tenant_id: UUID,
     issues_summary: str = "",
+    user_id: Optional[UUID] = None,
+    user_roles: Optional[list[str]] = None,
+    user_clearance_level: Optional[str] = None,
 ) -> dict[str, list[str]]:
     """Search KBs for all categories in parallel.
 
@@ -368,14 +375,22 @@ async def _search_kbs(
         for kb_id in cat.knowledge_base_ids:
             try:
                 async with httpx.AsyncClient(timeout=15.0) as client:
-                    resp = await client.post(
-                        f"{settings.rag_service_url}/internal/v1/search/hybrid",
-                        json={
+                    search_body = {
                             "query": query,
                             "knowledge_base_id": kb_id,
                             "tenant_id": str(tenant_id),
                             "top_k": cat.max_chunks,
-                        },
+                    }
+                    if user_clearance_level or user_roles:
+                        search_body["user_filters"] = {
+                            "clearance_level": user_clearance_level or "internal",
+                            "roles": user_roles or [],
+                        }
+                    if user_id:
+                        search_body["user_id"] = str(user_id)
+                    resp = await client.post(
+                        f"{settings.rag_service_url}/internal/v1/search/hybrid",
+                        json=search_body,
                         headers={
                             "X-Internal-Secret": settings.internal_api_secret,
                             "Content-Type": "application/json",

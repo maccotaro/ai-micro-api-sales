@@ -81,6 +81,8 @@ class ProposalPipelineService:
         persona_id: Optional[str] = None,
         run_id: Optional[str] = None,
         resume_run_id: Optional[str] = None,
+        user_roles: Optional[list[str]] = None,
+        user_clearance_level: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """Execute pipeline with SSE event streaming."""
         pipeline_start = time.time()
@@ -125,7 +127,9 @@ class ProposalPipelineService:
                     yield sse_event("stage_start", {"stage": 0, "name": STAGE_NAMES[0]})
                     t0 = time.time()
                     context = await stage0_collect_context(
-                        minute_id, tenant_id, config, db
+                        minute_id, tenant_id, config, db, user_id=user_id,
+                        user_roles=user_roles,
+                        user_clearance_level=user_clearance_level,
                     )
                     duration = int((time.time() - t0) * 1000)
                     stage_results[0] = {"status": "completed", "duration_ms": duration}
@@ -318,6 +322,8 @@ class ProposalPipelineService:
         persona_id: Optional[str] = None,
         run_id: Optional[str] = None,
         resume_run_id: Optional[str] = None,
+        user_roles: Optional[list[str]] = None,
+        user_clearance_level: Optional[str] = None,
     ) -> dict:
         """Execute pipeline and return complete JSON result."""
         result = {}
@@ -325,6 +331,8 @@ class ProposalPipelineService:
             minute_id, tenant_id, user_id, db,
             persona_id=persona_id, run_id=run_id,
             resume_run_id=resume_run_id,
+            user_roles=user_roles,
+            user_clearance_level=user_clearance_level,
         ):
             # Parse SSE to extract result event
             if event_str.startswith("data: "):

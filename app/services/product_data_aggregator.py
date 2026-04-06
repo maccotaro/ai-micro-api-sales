@@ -92,6 +92,7 @@ async def _kb_fallback_search(
     kb_id: UUID,
     tenant_id: UUID,
     top_k: int = 3,
+    user_id: Optional[UUID] = None,
 ) -> str:
     """api-rag の /internal/search/hybrid にリクエストして KB フォールバック検索。
 
@@ -99,17 +100,21 @@ async def _kb_fallback_search(
     """
     search_url = f"{settings.rag_service_url}/internal/v1/search/hybrid"
 
+    search_body = {
+        "query": query,
+        "tenant_id": str(tenant_id),
+        "knowledge_base_id": str(kb_id),
+        "top_k": top_k,
+        "enable_graph": False,
+    }
+    if user_id:
+        search_body["user_id"] = str(user_id)
+
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             response = await client.post(
                 search_url,
-                json={
-                    "query": query,
-                    "tenant_id": str(tenant_id),
-                    "knowledge_base_id": str(kb_id),
-                    "top_k": top_k,
-                    "enable_graph": False,
-                },
+                json=search_body,
                 headers={
                     "X-Internal-Secret": settings.internal_api_secret,
                     "Content-Type": "application/json",
