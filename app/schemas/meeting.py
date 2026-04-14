@@ -56,6 +56,12 @@ class MeetingMinuteResponse(MeetingMinuteBase):
     id: UUID
     parsed_json: Optional[Dict[str, Any]] = None
     status: str
+    # STT integration fields
+    stt_job_id: Optional[UUID] = None
+    corrected_text: Optional[str] = None
+    final_text: Optional[str] = None
+    minutes_status: Optional[str] = None
+    version: Optional[int] = None
     created_by: UUID
     created_at: datetime
     updated_at: datetime

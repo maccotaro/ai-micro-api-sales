@@ -428,6 +428,7 @@ curl -X GET http://localhost:8005/api/sales/graph/stats \
 | テーブル | 説明 | 操作 |
 |---------|------|------|
 | `meeting_minutes` | 議事録 | CRUD |
+| `meeting_minutes_versions` | 議事録バージョン管理 | 自動作成 |
 | `proposal_history` | 提案履歴 | CRUD |
 | `products` | 商品マスタ | 読み取りのみ |
 | `campaigns` | キャンペーン | 読み取りのみ |
@@ -436,8 +437,15 @@ curl -X GET http://localhost:8005/api/sales/graph/stats \
 
 ### ステータス遷移
 
-**議事録ステータス:**
+**議事録ステータス (status):**
 - `draft` → `analyzed` → `proposed` → `closed`
+
+**議事録ライフサイクル (minutes_status) — STT 連携時:**
+- `manual` — 手動作成（従来）、STT 連携なし
+- `raw` → `corrected` → `reviewed` → `finalized` — STT dispatch 経由
+- KB 補正パイプライン: dispatch 受信 → api-rag で用語検索 → api-llm で補正 → corrected
+- finalized 状態の議事録はテキスト変更不可（409 返却）
+- バージョン管理: テキスト更新時に meeting_minutes_versions に旧バージョンを自動保存
 
 **提案フィードバック:**
 - `pending`, `accepted`, `rejected`, `modified`

@@ -18,7 +18,7 @@ from app.core.security import (
     get_user_tenant_id,
     check_tenant_access,
 )
-from app.models.meeting import MeetingMinute
+from app.models.meeting import MeetingMinute, MeetingMinuteVersion
 from app.schemas.meeting import (
     MeetingMinuteCreate,
     MeetingMinuteUpdate,
@@ -187,6 +187,27 @@ async def update_meeting_minute(
     """Update a meeting minute."""
     minute = _get_minute_with_access(db, minute_id, current_user)
 
+    # Reject updates to finalized minutes
+    if getattr(minute, "minutes_status", None) == "finalized":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot update finalized meeting minutes",
+        )
+
+    # Save version before updating if STT-originated (has stt_job_id)
+    if getattr(minute, "stt_job_id", None) is not None:
+        current_text = minute.final_text or minute.corrected_text or minute.raw_text
+        if current_text:
+            version = MeetingMinuteVersion(
+                minutes_id=minute.id,
+                version=minute.version or 1,
+                status=minute.minutes_status or "manual",
+                text=current_text,
+                changed_by=UUID(current_user["user_id"]),
+            )
+            db.add(version)
+            minute.version = (minute.version or 1) + 1
+
     update_data = data.model_dump(exclude_unset=True)
     # Track whether user explicitly set industry/area in this request
     user_set_industry = "industry" in update_data
@@ -218,6 +239,46 @@ async def update_meeting_minute(
     db.refresh(minute)
 
     logger.info(f"Updated meeting minute: {minute.id}")
+    return MeetingMinuteResponse.model_validate(minute)
+
+
+@router.post("/{minute_id}/finalize", response_model=MeetingMinuteResponse)
+async def finalize_meeting_minute(
+    minute_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_sales_access),
+):
+    """Finalize a meeting minute. No further text changes allowed after this."""
+    minute = _get_minute_with_access(db, minute_id, current_user)
+
+    if getattr(minute, "minutes_status", None) == "finalized":
+        raise HTTPException(status_code=409, detail="Already finalized")
+
+    # Only STT-originated minutes can be finalized
+    if getattr(minute, "stt_job_id", None) is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Only STT-originated minutes can be finalized",
+        )
+
+    # Save version before finalizing
+    current_text = minute.final_text or minute.corrected_text or minute.raw_text
+    if current_text:
+        version = MeetingMinuteVersion(
+            minutes_id=minute.id,
+            version=minute.version or 1,
+            status=minute.minutes_status or "manual",
+            text=current_text,
+            changed_by=UUID(current_user["user_id"]),
+        )
+        db.add(version)
+
+    minute.minutes_status = "finalized"
+    minute.version = (minute.version or 1) + 1
+    db.commit()
+    db.refresh(minute)
+
+    logger.info(f"Finalized meeting minute: {minute.id}")
     return MeetingMinuteResponse.model_validate(minute)
 
 
