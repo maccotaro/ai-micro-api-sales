@@ -86,12 +86,14 @@ async def receive_meeting_transcript(
             "meeting_minutes_id": str(existing.id),
         }
 
-    # Build speaker-labeled text as company_name placeholder
-    speaker_names = []
+    # Build attendees list as List[Dict] (matching MeetingMinuteResponse schema)
+    seen_names = set()
+    attendees_list = []
     for m in payload.speaker_mappings:
         name = m.get("participant_name") or m.get("speaker_label", "Unknown")
-        if name not in speaker_names:
-            speaker_names.append(name)
+        if name not in seen_names:
+            seen_names.add(name)
+            attendees_list.append({"name": name, "role": "participant"})
     company_name = payload.title or f"STT Meeting ({payload.meeting_type})"
 
     # Create meeting_minutes record
@@ -104,7 +106,7 @@ async def receive_meeting_transcript(
         tenant_id=payload.tenant_id,
         created_by=payload.created_by,
         meeting_date=datetime.utcnow().date(),
-        attendees=speaker_names,
+        attendees=attendees_list,
         version=1,
     )
     db.add(minute)
