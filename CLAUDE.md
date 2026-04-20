@@ -524,7 +524,7 @@ curl http://localhost:8005/api/sales/graph/health
 - **ai-micro-api-admin**: マスタデータ管理（商品、キャンペーン等）
 - **ai-micro-api-auth**: 認証サービス
 - **ai-micro-neo4j**: グラフデータベース（GraphRAG用）
-- **ai-micro-front-sales**: フロントエンド（未実装）
+- **ai-micro-front-user**: フロントエンド（front-sales から統合済み、Port 3002）
 
 ---
 
