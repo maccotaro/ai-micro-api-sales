@@ -291,6 +291,7 @@ async def stage5_checklist_summary(
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
     persona_id: Optional[str] = None,
+    **kwargs,
 ) -> dict:
     """Stage 5: Checklist + summary generation."""
     stage_cfg = config.get_stage(5)
