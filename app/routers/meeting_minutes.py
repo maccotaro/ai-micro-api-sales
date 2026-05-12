@@ -28,6 +28,7 @@ from app.schemas.meeting import (
 )
 from app.services.analysis_service import AnalysisService
 from app.services.embedding_service import get_embedding_service
+from app.core.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,52 @@ router = APIRouter(prefix="/meeting-minutes", tags=["meeting-minutes"])
 
 
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000"
+
+
+def _trigger_parse_if_ready(minute: MeetingMinute, tenant_id: Optional[UUID] = None):
+    """
+    Trigger structured parsing task if conditions are met.
+
+    Conditions:
+    - raw_text length >= 500 characters
+    - minutes_status in ('manual', 'finalized')
+
+    Args:
+        minute: MeetingMinute instance
+        tenant_id: Tenant UUID for RLS
+    """
+    # Check conditions
+    if not minute.raw_text or len(minute.raw_text) < 500:
+        logger.debug(
+            f"Skipping parse for meeting {minute.id}: raw_text too short "
+            f"(length: {len(minute.raw_text) if minute.raw_text else 0})"
+        )
+        return
+
+    minutes_status = minute.minutes_status or "manual"
+    if minutes_status not in ("manual", "finalized"):
+        logger.debug(
+            f"Skipping parse for meeting {minute.id}: invalid minutes_status "
+            f"(status: {minutes_status}, expected: manual or finalized)"
+        )
+        return
+
+    # Trigger Celery task
+    try:
+        celery_app.send_task(
+            "app.tasks.parse_meeting_minutes.parse_meeting_minutes",
+            kwargs={
+                "meeting_id": str(minute.id),
+                "tenant_id": str(tenant_id) if tenant_id else None,
+            },
+            queue="llm",
+        )
+        logger.info(
+            f"Triggered structured parsing for meeting {minute.id} "
+            f"(raw_text length: {len(minute.raw_text)}, status: {minutes_status})"
+        )
+    except Exception as e:
+        logger.error(f"Failed to trigger parsing for meeting {minute.id}: {e}")
 
 
 def _build_tenant_query(db: Session, current_user: dict):
@@ -174,6 +221,10 @@ async def create_meeting_minute(
     db.refresh(minute)
 
     logger.info(f"Created meeting minute: {minute.id} for company {minute.company_name}")
+
+    # Trigger structured parsing if conditions are met
+    _trigger_parse_if_ready(minute, user_tenant_id)
+
     return MeetingMinuteResponse.model_validate(minute)
 
 
@@ -279,7 +330,73 @@ async def finalize_meeting_minute(
     db.refresh(minute)
 
     logger.info(f"Finalized meeting minute: {minute.id}")
+
+    # Trigger structured parsing after finalization
+    user_tenant_id = get_user_tenant_id(current_user)
+    _trigger_parse_if_ready(minute, user_tenant_id)
+
     return MeetingMinuteResponse.model_validate(minute)
+
+
+@router.post("/{minute_id}/parse", status_code=202)
+async def trigger_parse_meeting_minute(
+    minute_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_sales_access),
+):
+    """
+    Manually trigger structured parsing for a meeting minute.
+
+    Returns:
+        202 Accepted with task_id for tracking
+    """
+    minute = _get_minute_with_access(db, minute_id, current_user)
+
+    # Validation: raw_text must exist
+    if not minute.raw_text:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot parse: meeting minute has no raw_text",
+        )
+
+    # Validation: raw_text must be at least 500 characters
+    if len(minute.raw_text) < 500:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot parse: raw_text too short (length: {len(minute.raw_text)}, required: >= 500)",
+        )
+
+    # Trigger Celery task
+    user_tenant_id = get_user_tenant_id(current_user)
+
+    try:
+        result = celery_app.send_task(
+            "app.tasks.parse_meeting_minutes.parse_meeting_minutes",
+            kwargs={
+                "meeting_id": str(minute.id),
+                "tenant_id": str(user_tenant_id) if user_tenant_id else None,
+            },
+            queue="llm",
+        )
+        task_id = result.id
+        logger.info(
+            f"Triggered manual parse for meeting {minute.id} "
+            f"(task_id: {task_id}, raw_text length: {len(minute.raw_text)})"
+        )
+
+        return {
+            "message": "Parsing task triggered",
+            "meeting_id": str(minute.id),
+            "task_id": task_id,
+            "status": "accepted",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to trigger parsing for meeting {minute.id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to trigger parsing task: {str(e)}",
+        )
 
 
 @router.delete("/{minute_id}", status_code=204)

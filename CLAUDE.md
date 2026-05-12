@@ -34,6 +34,10 @@ ai-micro-api-sales (Port 8005)
 1. **議事録管理** (`/api/sales/meeting-minutes`)
    - 議事録のCRUD操作
    - AIによる議事録解析（課題・ニーズ抽出）
+   - **構造化パース**: raw_text → 12セクション自動抽出（celery-llm連携）
+     - Few-shot learning（3サンプル）+ Pydantic validation
+     - 自動トリガー: 作成時・finalize時（500文字以上）
+     - 手動トリガー: `POST /{id}/parse`
 
 2. **提案書生成** (`/api/sales/proposals`)
    - 解析結果に基づく自動提案生成
@@ -150,12 +154,21 @@ ai-micro-api-sales/
 | メソッド | パス | 説明 |
 |---------|------|------|
 | GET | `/` | 議事録一覧取得 |
-| GET | `/{id}` | 議事録詳細取得 |
-| POST | `/` | 議事録作成 |
+| GET | `/{id}` | 議事録詳細取得（parsed_json含む） |
+| POST | `/` | 議事録作成（500文字以上で自動パーストリガー） |
 | PUT | `/{id}` | 議事録更新 |
+| POST | `/{id}/finalize` | 議事録finalize（自動パーストリガー） |
+| POST | `/{id}/parse` | 手動構造化パース（202 Accepted + task_id） |
 | DELETE | `/{id}` | 議事録削除 |
 | POST | `/{id}/analyze` | AI解析実行 |
 | GET | `/{id}/analysis` | 解析結果取得 |
+
+**構造化パース** (`POST /{id}/parse`):
+- **条件**: raw_text >= 500文字
+- **処理**: Celeryタスク経由で12セクション抽出
+- **レスポンス**: `{"meeting_id": "...", "task_id": "...", "status": "accepted"}`
+- **結果**: `parsed_json` フィールドに格納
+- **ステータス**: `parsing` → `parsed` / `parse_failed`
 
 ### 提案 (`/api/sales/proposals`)
 
