@@ -5,6 +5,7 @@ API endpoints for managing and analyzing meeting minutes.
 Tenant isolation: filters by tenant_id from JWT. super_admin sees all tenants.
 """
 import logging
+import os
 from typing import Optional
 from uuid import UUID
 
@@ -37,26 +38,40 @@ router = APIRouter(prefix="/meeting-minutes", tags=["meeting-minutes"])
 
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000"
 
+# Minutes generation configuration
+MIN_TEXT_LENGTH_FOR_MINUTES = int(os.getenv("MIN_TEXT_LENGTH_FOR_MINUTES", "300"))
+FORCE_MINUTES_FOR_SALES = os.getenv("FORCE_MINUTES_FOR_SALES", "true").lower() == "true"
+
 
 def _trigger_parse_if_ready(minute: MeetingMinute, tenant_id: Optional[UUID] = None):
     """
     Trigger structured parsing task if conditions are met.
 
     Conditions:
-    - raw_text length >= 500 characters
+    - raw_text length >= MIN_TEXT_LENGTH_FOR_MINUTES characters (default: 300)
     - minutes_status in ('manual', 'finalized')
+    - For sales meetings: force generation if FORCE_MINUTES_FOR_SALES=true
 
     Args:
         minute: MeetingMinute instance
         tenant_id: Tenant UUID for RLS
     """
-    # Check conditions
-    if not minute.raw_text or len(minute.raw_text) < 500:
-        logger.debug(
-            f"Skipping parse for meeting {minute.id}: raw_text too short "
-            f"(length: {len(minute.raw_text) if minute.raw_text else 0})"
+    # Force generation for sales meetings if enabled
+    is_sales_meeting = minute.meeting_type == "sales" if hasattr(minute, "meeting_type") else False
+    if is_sales_meeting and FORCE_MINUTES_FOR_SALES:
+        logger.info(
+            f"Force-triggering parse for sales meeting {minute.id} "
+            f"(raw_text length: {len(minute.raw_text) if minute.raw_text else 0})"
         )
-        return
+    else:
+        # Check text length for non-sales or non-forced meetings
+        if not minute.raw_text or len(minute.raw_text) < MIN_TEXT_LENGTH_FOR_MINUTES:
+            logger.debug(
+                f"Skipping parse for meeting {minute.id}: raw_text too short "
+                f"(length: {len(minute.raw_text) if minute.raw_text else 0}, "
+                f"threshold: {MIN_TEXT_LENGTH_FOR_MINUTES})"
+            )
+            return
 
     minutes_status = minute.minutes_status or "manual"
     if minutes_status not in ("manual", "finalized"):
