@@ -8,9 +8,15 @@ logger = logging.getLogger(__name__)
 # Celeryアプリケーション初期化
 celery_app = Celery("ai_micro_sales")
 
-# Broker/Backend設定（環境変数から取得）
-broker_url = os.getenv("CELERY_BROKER_URL", "redis://:password@host.docker.internal:6379/1")
-result_backend = os.getenv("CELERY_RESULT_BACKEND", "redis://:password@host.docker.internal:6379/2")
+# Broker/Backend設定。
+# 優先: CELERY_BROKER_URL / CELERY_RESULT_BACKEND（明示指定があれば）
+# フォールバック: REDIS_URL（クラスタ内 redis。本サービスには必ず注入される）から db/1・db/2 を導出。
+# これらが無い場合のみ従来の host.docker.internal 既定。
+# ※ 以前 CELERY_* 未設定で host.docker.internal にフォールバックし、k8s 内で名前解決できず
+#    parse タスクの enqueue が常に失敗していた不具合への対処。
+_redis_base = os.getenv("REDIS_URL", "redis://:password@host.docker.internal:6379").rstrip("/")
+broker_url = os.getenv("CELERY_BROKER_URL") or f"{_redis_base}/1"
+result_backend = os.getenv("CELERY_RESULT_BACKEND") or f"{_redis_base}/2"
 
 celery_app.conf.broker_url = broker_url
 celery_app.conf.result_backend = result_backend

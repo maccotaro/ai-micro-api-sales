@@ -42,8 +42,13 @@ class MeetingTranscriptPayload(BaseModel):
 
 
 async def _run_kb_correction_background(minutes_id: UUID) -> None:
-    """Run KB correction in background with its own DB session."""
+    """Run KB correction, then auto-trigger the 12-section parse.
+
+    会議後に話者名・トランスクリプトを修正して「議事録生成」した時点で、
+    KB補正 → 12セクション parse まで一気通貫で完走させる（finalize 待ちにしない）。
+    """
     from app.services.kb_correction import run_kb_correction
+    from app.core.celery_app import celery_app
 
     db = SessionLocal()
     try:
@@ -52,6 +57,24 @@ async def _run_kb_correction_background(minutes_id: UUID) -> None:
         logger.error(f"Background KB correction failed for {minutes_id}: {e}")
     finally:
         db.close()
+
+    # KB補正の成否にかかわらず、12セクション parse を自動起動する
+    # （parse タスクは corrected_text→raw_text の順で対象テキストを選ぶ）
+    try:
+        db2 = SessionLocal()
+        try:
+            minute = db2.query(MeetingMinute).filter(MeetingMinute.id == minutes_id).first()
+            tenant_id = str(minute.tenant_id) if minute and minute.tenant_id else None
+        finally:
+            db2.close()
+        celery_app.send_task(
+            "app.tasks.parse_meeting_minutes.parse_meeting_minutes",
+            kwargs={"meeting_id": str(minutes_id), "tenant_id": tenant_id},
+            queue="llm",
+        )
+        logger.info(f"Enqueued 12-section parse after KB correction for {minutes_id}")
+    except Exception as e:
+        logger.error(f"Failed to enqueue parse after KB correction for {minutes_id}: {e}")
 
 
 @router.post("/sales/meeting-transcript", status_code=202)
