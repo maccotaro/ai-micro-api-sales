@@ -68,11 +68,12 @@ async def stream_chat(
     minute = _get_minute_for_chat(db, minute_id, current_user)
     user_id = UUID(current_user["user_id"])
 
-    # Check if meeting is analyzed
-    if minute.status == "draft":
+    # 議事録の構造化(12セクション parse)が完了していればチャット可能。
+    # ③「AI解析」は廃止したため status='analyzed' ではなく parsed_json の有無で判定する。
+    if not minute.parsed_json:
         raise HTTPException(
             status_code=400,
-            detail="Meeting minute must be analyzed before chatting. Run analysis first."
+            detail="議事録の生成が完了してからチャットできます。トランスクリプトを確認し議事録を生成してください。"
         )
 
     return StreamingResponse(
