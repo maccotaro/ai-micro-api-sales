@@ -72,18 +72,6 @@ class PipelineStatusResponse(BaseModel):
     stages: list = Field(default_factory=list)
 
 
-class AnalyzeMeetingRequest(BaseModel):
-    tenant_id: UUID
-    user_id: UUID
-
-
-class AnalyzeMeetingResponse(BaseModel):
-    id: str
-    status: str
-    analysis: Optional[dict] = None
-    error: Optional[str] = None
-
-
 # --- Endpoints ---
 
 
@@ -209,60 +197,6 @@ async def get_pipeline_status(
         error_message=row[6],
         minio_object_key=row[8],
         stages=stages,
-    )
-
-
-@router.post(
-    "/meeting-minutes/{minute_id}/analyze",
-    response_model=AnalyzeMeetingResponse,
-)
-async def analyze_meeting_minute(
-    minute_id: UUID,
-    request: AnalyzeMeetingRequest,
-    _: None = Depends(verify_internal_secret),
-    db: Session = Depends(get_db),
-):
-    """Analyze a meeting minute using AI (internal).
-
-    Extracts issues, needs, keywords, summary, and next actions.
-    Also stores results in Neo4j graph and generates embeddings.
-    """
-    from app.models.meeting import MeetingMinute
-    from app.services.analysis_service import AnalysisService
-
-    minute = db.query(MeetingMinute).filter(
-        MeetingMinute.id == minute_id,
-        MeetingMinute.tenant_id == request.tenant_id,
-    ).first()
-
-    if not minute:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Meeting minute not found",
-        )
-
-    try:
-        analysis_service = AnalysisService()
-        analysis_result = await analysis_service.analyze_meeting(
-            meeting=minute,
-            db=db,
-            tenant_id=request.tenant_id,
-        )
-    except Exception as e:
-        logger.error(
-            "Meeting analysis failed for minute_id=%s: %s",
-            minute_id, e, exc_info=True,
-        )
-        return AnalyzeMeetingResponse(
-            id=str(minute_id),
-            status="error",
-            error=str(e),
-        )
-
-    return AnalyzeMeetingResponse(
-        id=str(minute_id),
-        status="completed",
-        analysis=analysis_result.model_dump() if hasattr(analysis_result, "model_dump") else analysis_result,
     )
 
 

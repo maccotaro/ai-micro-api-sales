@@ -184,11 +184,8 @@ def _save_corrected(
     minute.minutes_status = "corrected"
     minute.version = (minute.version or 1) + 1
 
-    if kb_skipped:
-        # Record skip reason in parsed_json metadata
-        metadata = minute.parsed_json or {}
-        metadata["kb_correction"] = {"skipped": True, "reason": reason}
-        minute.parsed_json = metadata
+    # NOTE: スキップ理由メタは parsed_json に書かない（parsed_json は12セクション議事録専用）。
+    # 読み手も存在しないためログのみに残す（下の logger 出力 + version レコード）。
 
     db.commit()
     logger.info(

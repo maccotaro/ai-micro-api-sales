@@ -36,6 +36,62 @@ router = APIRouter(prefix="/proposals", tags=["proposals"])
 
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000"
 
+_EMPTY_SECTION_VALUES = {"言及なし", "不明", "なし", ""}
+
+
+def _section_lines(value) -> list[str]:
+    """12セクションの本文（複数行/箇条書き）を行リストへ分解。空・「言及なし」は除外。"""
+    if not value:
+        return []
+    if isinstance(value, list):
+        items = [str(v).strip() for v in value]
+    else:
+        items = [ln.strip("-・*　 ").strip() for ln in str(value).splitlines()]
+    return [t for t in items if t and t not in _EMPTY_SECTION_VALUES]
+
+
+def _build_analysis_from_minute(minute: MeetingMinute) -> MeetingMinuteAnalysis:
+    """meeting_minutes.parsed_json から提案入力（MeetingMinuteAnalysis）を構築する。
+
+    parsed_json は12セクション構造化議事録（単一スキーマ）を前提に読み替える:
+      issues←採用課題 / needs←ターゲット+採用計画と希望条件 /
+      next_actions←ネクストアクション / summary←総括(or募集内容の詳細)
+    旧「AI解析」形式（issues/needs/summary キー）が残るレコードはフォールバックで読む。
+    ③固有の confidence_score/decision_maker_present は廃止しデフォルト扱い。
+    """
+    pj = minute.parsed_json or {}
+
+    # 12セクション形式（採用課題/総括 等のキーで判定）
+    if "採用課題" in pj or "総括" in pj or "募集内容の詳細" in pj:
+        issues = [ExtractedIssue(issue=t) for t in _section_lines(pj.get("採用課題"))]
+        need_texts = _section_lines(pj.get("ターゲット")) + _section_lines(pj.get("採用計画と希望条件"))
+        needs = [ExtractedNeed(need=t) for t in need_texts]
+        next_actions = _section_lines(pj.get("ネクストアクション"))
+        summary = pj.get("総括") or pj.get("募集内容の詳細") or ""
+    else:
+        # 旧③形式フォールバック
+        issues = [ExtractedIssue(**i) for i in pj.get("issues", [])]
+        needs = [ExtractedNeed(**n) for n in pj.get("needs", [])]
+        next_actions = pj.get("next_actions", [])
+        summary = pj.get("summary", "")
+
+    return MeetingMinuteAnalysis(
+        meeting_minute_id=minute.id,
+        company_name=minute.company_name,
+        industry=minute.industry,
+        area=minute.area,
+        issues=issues,
+        needs=needs,
+        keywords=[],
+        summary=summary,
+        company_size_estimate=None,
+        decision_maker_present=False,
+        next_actions=next_actions,
+        follow_up_date=minute.next_action_date,
+        confidence_score=0.5,
+        analysis_timestamp=minute.updated_at,
+    )
+
 
 def _build_proposal_tenant_query(db: Session, current_user: dict):
     """Build a base query with tenant isolation for proposals."""
@@ -152,26 +208,11 @@ async def generate_proposal(
     if not minute.parsed_json:
         raise HTTPException(
             status_code=400,
-            detail="Meeting minute must be analyzed first. Call POST /meeting-minutes/{id}/analyze"
+            detail="議事録の構造化（12セクション parse）が未完了です。raw_text が十分な長さになると自動で parse されます。"
         )
 
-    # Build analysis from parsed_json
-    analysis = MeetingMinuteAnalysis(
-        meeting_minute_id=minute.id,
-        company_name=minute.company_name,
-        industry=minute.industry,
-        area=minute.area,
-        issues=[ExtractedIssue(**i) for i in minute.parsed_json.get("issues", [])],
-        needs=[ExtractedNeed(**n) for n in minute.parsed_json.get("needs", [])],
-        keywords=minute.parsed_json.get("keywords", []),
-        summary=minute.parsed_json.get("summary", ""),
-        company_size_estimate=minute.parsed_json.get("company_size_estimate"),
-        decision_maker_present=minute.parsed_json.get("decision_maker_present", False),
-        next_actions=minute.parsed_json.get("next_actions", []),
-        follow_up_date=minute.next_action_date,
-        confidence_score=minute.parsed_json.get("confidence_score", 0.5),
-        analysis_timestamp=minute.updated_at,
-    )
+    # Build proposal input from parsed_json (12-section structured minutes)
+    analysis = _build_analysis_from_minute(minute)
 
     # Generate proposal - inherits tenant_id from parent minute
     proposal_service = ProposalService()

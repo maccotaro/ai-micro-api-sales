@@ -34,17 +34,23 @@ async def verify_internal_secret(
 
 
 def _extract_summary(parsed_json: Optional[Dict[str, Any]]) -> Optional[str]:
-    """Extract summary from parsed_json analysis result."""
+    """Extract a summary from parsed_json (12-section minutes; legacy ③ fallback)."""
     if not parsed_json:
         return None
-    return parsed_json.get("summary")
+    # 12セクション: 総括 を要約として使う（無ければ募集内容の詳細）
+    return (
+        parsed_json.get("総括")
+        or parsed_json.get("募集内容の詳細")
+        or parsed_json.get("summary")  # 旧③形式フォールバック
+    )
 
 
 def _extract_action_items(parsed_json: Optional[Dict[str, Any]]) -> Optional[List[str]]:
-    """Extract action items / next_actions from parsed_json analysis result."""
+    """Extract next actions from parsed_json (12-section minutes; legacy ③ fallback)."""
     if not parsed_json:
         return None
-    return parsed_json.get("next_actions")
+    # 12セクション: ネクストアクション（List[str]）。旧③は next_actions。
+    return parsed_json.get("ネクストアクション") or parsed_json.get("next_actions")
 
 
 @router.get("")

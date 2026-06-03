@@ -29,7 +29,7 @@ SYSTEM_PROMPT_TEMPLATE = """あなたは営業支援AIアシスタントです�
 地域: {area}
 商談日: {meeting_date}
 
-## 解析結果
+## 議事録の要点
 {analysis_summary}
 
 ## 指示
@@ -49,30 +49,54 @@ class ChatService:
             secret=settings.internal_api_secret,
         )
 
+    # コンテキストに含める12セクション議事録の見出し（人間が読む順）
+    _CONTEXT_SECTIONS = [
+        "総括",
+        "募集内容の詳細",
+        "募集背景",
+        "ターゲット",
+        "採用課題",
+        "採用計画と希望条件",
+        "提案内容",
+        "ネクストアクション",
+    ]
+
     def _build_system_prompt(self, meeting: MeetingMinute) -> str:
-        """Build system prompt from meeting minute context."""
-        analysis = meeting.parsed_json or {}
+        """Build system prompt from meeting minute context.
 
-        # Build analysis summary
-        issues = analysis.get("issues", [])
-        needs = analysis.get("needs", [])
-        keywords = analysis.get("keywords", [])
-        summary = analysis.get("summary", "解析結果なし")
+        コンテキストは parsed_json の12セクション構造化議事録から構築する。
+        旧「AI解析」(issues/needs/summary) 形式のレコードはフォールバックで読む。
+        """
+        parsed = meeting.parsed_json or {}
 
-        analysis_parts = [f"要約: {summary}"]
+        analysis_parts: list[str] = []
+        if "総括" in parsed or "採用課題" in parsed or "募集内容の詳細" in parsed:
+            # 12セクション形式
+            for section in self._CONTEXT_SECTIONS:
+                value = parsed.get(section)
+                if isinstance(value, list):
+                    value = "\n".join(f"  - {v}" for v in value if v)
+                if value and str(value).strip() not in ("言及なし", "不明", ""):
+                    analysis_parts.append(f"【{section}】\n{value}")
+        else:
+            # 旧③形式フォールバック
+            summary = parsed.get("summary")
+            if summary:
+                analysis_parts.append(f"要約: {summary}")
+            issues = parsed.get("issues", [])
+            if issues:
+                issue_list = "\n".join(
+                    f"  - {i.get('issue', '')} ({i.get('priority', 'medium')})" for i in issues[:5]
+                )
+                analysis_parts.append(f"課題:\n{issue_list}")
+            needs = parsed.get("needs", [])
+            if needs:
+                need_list = "\n".join(
+                    f"  - {n.get('need', '')} ({n.get('urgency', 'medium')})" for n in needs[:5]
+                )
+                analysis_parts.append(f"ニーズ:\n{need_list}")
 
-        if issues:
-            issue_list = "\n".join([f"  - {i.get('issue', '')} ({i.get('priority', 'medium')})" for i in issues[:5]])
-            analysis_parts.append(f"課題:\n{issue_list}")
-
-        if needs:
-            need_list = "\n".join([f"  - {n.get('need', '')} ({n.get('urgency', 'medium')})" for n in needs[:5]])
-            analysis_parts.append(f"ニーズ:\n{need_list}")
-
-        if keywords:
-            analysis_parts.append(f"キーワード: {', '.join(keywords[:10])}")
-
-        analysis_summary = "\n\n".join(analysis_parts)
+        analysis_summary = "\n\n".join(analysis_parts) if analysis_parts else "（議事録の構造化はまだ完了していません）"
 
         return SYSTEM_PROMPT_TEMPLATE.format(
             company_name=meeting.company_name,

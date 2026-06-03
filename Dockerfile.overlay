@@ -1,0 +1,3 @@
+FROM cr.dev.gw.link/elecs/ai-micro-api-sales:1.1.1
+WORKDIR /app
+COPY app ./app

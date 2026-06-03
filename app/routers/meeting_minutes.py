@@ -25,7 +25,6 @@ from app.schemas.meeting import (
     MeetingMinuteUpdate,
     MeetingMinuteResponse,
     MeetingMinuteListResponse,
-    MeetingMinuteAnalysis,
 )
 from app.services.analysis_service import AnalysisService
 from app.services.embedding_service import get_embedding_service
@@ -428,95 +427,6 @@ async def delete_meeting_minute(
 
     logger.info(f"Deleted meeting minute: {minute_id}")
     return None
-
-
-@router.post("/{minute_id}/analyze", response_model=MeetingMinuteAnalysis)
-async def analyze_meeting_minute(
-    minute_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(require_sales_access),
-):
-    """
-    Analyze a meeting minute using AI.
-
-    This endpoint uses LLM to extract:
-    - Key issues and challenges
-    - Customer needs
-    - Keywords
-    - Summary
-    - Next actions
-
-    Analysis results are also stored in Neo4j graph for recommendations.
-    Embeddings are generated and stored for vector similarity search.
-    """
-    minute = _get_minute_with_access(db, minute_id, current_user)
-    user_id = UUID(current_user["user_id"])
-    tenant_id = UUID(current_user.get("tenant_id")) if current_user.get("tenant_id") else None
-
-    if not minute.raw_text:
-        raise HTTPException(status_code=400, detail="Meeting minute has no text content")
-
-    analysis_service = AnalysisService()
-    analysis = await analysis_service.analyze_meeting(
-        meeting=minute,
-        db=db,
-        tenant_id=tenant_id,
-        store_in_graph=True,
-    )
-
-    # Generate and store embedding for vector similarity search
-    try:
-        embedding_service = await get_embedding_service()
-        await embedding_service.store_meeting_embedding(
-            db=db,
-            meeting_id=minute.id,
-            text_content=minute.raw_text,
-            metadata={
-                "company_name": minute.company_name,
-                "industry": minute.industry,
-                "area": minute.area,
-                "user_id": str(user_id),
-            }
-        )
-        logger.info(f"Stored embedding for meeting {minute.id}")
-    except Exception as e:
-        logger.warning(f"Failed to store embedding for meeting {minute.id}: {e}")
-        # Don't fail the analysis if embedding fails
-
-    return analysis
-
-
-@router.get("/{minute_id}/analysis", response_model=MeetingMinuteAnalysis)
-async def get_meeting_analysis(
-    minute_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(require_sales_access),
-):
-    """Get the existing analysis for a meeting minute."""
-    minute = _get_minute_with_access(db, minute_id, current_user)
-
-    if not minute.parsed_json:
-        raise HTTPException(status_code=404, detail="Meeting minute has not been analyzed")
-
-    from datetime import datetime
-    from app.schemas.meeting import ExtractedIssue, ExtractedNeed
-
-    return MeetingMinuteAnalysis(
-        meeting_minute_id=minute.id,
-        company_name=minute.company_name,
-        industry=minute.industry,
-        area=minute.area,
-        issues=[ExtractedIssue(**i) for i in minute.parsed_json.get("issues", [])],
-        needs=[ExtractedNeed(**n) for n in minute.parsed_json.get("needs", [])],
-        keywords=minute.parsed_json.get("keywords", []),
-        summary=minute.parsed_json.get("summary", ""),
-        company_size_estimate=minute.parsed_json.get("company_size_estimate"),
-        decision_maker_present=minute.parsed_json.get("decision_maker_present", False),
-        next_actions=minute.parsed_json.get("next_actions", []),
-        follow_up_date=minute.next_action_date,
-        confidence_score=minute.parsed_json.get("confidence_score", 0.5),
-        analysis_timestamp=minute.updated_at,
-    )
 
 
 @router.post("/embeddings/generate-all")
