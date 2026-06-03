@@ -5,7 +5,6 @@ API endpoints for managing and analyzing meeting minutes.
 Tenant isolation: filters by tenant_id from JWT. super_admin sees all tenants.
 """
 import logging
-import os
 from typing import Optional
 from uuid import UUID
 
@@ -37,40 +36,24 @@ router = APIRouter(prefix="/meeting-minutes", tags=["meeting-minutes"])
 
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000"
 
-# Minutes generation configuration
-MIN_TEXT_LENGTH_FOR_MINUTES = int(os.getenv("MIN_TEXT_LENGTH_FOR_MINUTES", "300"))
-FORCE_MINUTES_FOR_SALES = os.getenv("FORCE_MINUTES_FOR_SALES", "true").lower() == "true"
-
 
 def _trigger_parse_if_ready(minute: MeetingMinute, tenant_id: Optional[UUID] = None):
     """
     Trigger structured parsing task if conditions are met.
 
     Conditions:
-    - raw_text length >= MIN_TEXT_LENGTH_FOR_MINUTES characters (default: 300)
+    - raw_text が空（空白のみ）でない（文字数の下限は設けない）
     - minutes_status in ('manual', 'finalized')
-    - For sales meetings: force generation if FORCE_MINUTES_FOR_SALES=true
 
     Args:
         minute: MeetingMinute instance
         tenant_id: Tenant UUID for RLS
     """
-    # Force generation for sales meetings if enabled
-    is_sales_meeting = minute.meeting_type == "sales" if hasattr(minute, "meeting_type") else False
-    if is_sales_meeting and FORCE_MINUTES_FOR_SALES:
-        logger.info(
-            f"Force-triggering parse for sales meeting {minute.id} "
-            f"(raw_text length: {len(minute.raw_text) if minute.raw_text else 0})"
-        )
-    else:
-        # Check text length for non-sales or non-forced meetings
-        if not minute.raw_text or len(minute.raw_text) < MIN_TEXT_LENGTH_FOR_MINUTES:
-            logger.debug(
-                f"Skipping parse for meeting {minute.id}: raw_text too short "
-                f"(length: {len(minute.raw_text) if minute.raw_text else 0}, "
-                f"threshold: {MIN_TEXT_LENGTH_FOR_MINUTES})"
-            )
-            return
+    # 文字数の下限は設けない。内容が空（空白のみ）の場合だけ parse をスキップする。
+    # 内容が薄い/採用商談でない場合は parse タスク側が「言及なし」で返すため安全。
+    if not minute.raw_text or not minute.raw_text.strip():
+        logger.debug(f"Skipping parse for meeting {minute.id}: empty raw_text")
+        return
 
     minutes_status = minute.minutes_status or "manual"
     if minutes_status not in ("manual", "finalized"):
@@ -366,18 +349,11 @@ async def trigger_parse_meeting_minute(
     """
     minute = _get_minute_with_access(db, minute_id, current_user)
 
-    # Validation: raw_text must exist
-    if not minute.raw_text:
+    # Validation: raw_text must be non-empty (文字数の下限は設けない)
+    if not minute.raw_text or not minute.raw_text.strip():
         raise HTTPException(
             status_code=400,
             detail="Cannot parse: meeting minute has no raw_text",
-        )
-
-    # Validation: raw_text must be at least 500 characters
-    if len(minute.raw_text) < 500:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot parse: raw_text too short (length: {len(minute.raw_text)}, required: >= 500)",
         )
 
     # Trigger Celery task
