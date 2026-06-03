@@ -29,15 +29,21 @@ SYSTEM_PROMPT_TEMPLATE = """あなたは営業支援AIアシスタントです�
 地域: {area}
 商談日: {meeting_date}
 
-## 議事録の要点
+## 議事録の要点（テーマ別整理）
 {analysis_summary}
 
+## 会議のトランスクリプト（文字起こし全文）
+{transcript}
+
 ## 指示
-- 議事録の内容に基づいて具体的に回答してください
-- 不明な点は正直に「情報がありません」と答えてください
-- 営業活動に役立つ提案や洞察を提供してください
+- 上記のトランスクリプトと要点に基づいて、会議で実際に話された内容を具体的に回答してください
+- 採用・求人に限らず、会議で話された話題（歴史・技術・投資など何でも）について答えてください
+- 議事録に書かれていない点は正直に「情報がありません」と答えてください
 - 日本語で回答してください
 """
+
+# トランスクリプトの最大文字数（コンテキスト肥大化を防ぐ）
+MAX_TRANSCRIPT_CHARS = 12000
 
 
 class ChatService:
@@ -96,7 +102,16 @@ class ChatService:
                 )
                 analysis_parts.append(f"ニーズ:\n{need_list}")
 
-        analysis_summary = "\n\n".join(analysis_parts) if analysis_parts else "（議事録の構造化はまだ完了していません）"
+        analysis_summary = "\n\n".join(analysis_parts) if analysis_parts else "（テーマ別の整理なし。トランスクリプトを参照してください）"
+
+        # 実際の会議内容はトランスクリプトにある。12セクションが「言及なし」主体の
+        # 非採用会議でも内容を答えられるよう、文字起こし全文をコンテキストに含める。
+        transcript_src = meeting.corrected_text or meeting.raw_text or ""
+        transcript = transcript_src[:MAX_TRANSCRIPT_CHARS]
+        if len(transcript_src) > MAX_TRANSCRIPT_CHARS:
+            transcript += "\n…(以下省略)"
+        if not transcript.strip():
+            transcript = "（文字起こしがありません）"
 
         return SYSTEM_PROMPT_TEMPLATE.format(
             company_name=meeting.company_name,
@@ -104,6 +119,7 @@ class ChatService:
             area=meeting.area or "不明",
             meeting_date=meeting.meeting_date.isoformat() if meeting.meeting_date else "不明",
             analysis_summary=analysis_summary,
+            transcript=transcript,
         )
 
     def _build_messages(
