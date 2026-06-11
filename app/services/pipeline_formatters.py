@@ -4,6 +4,8 @@ Extracted from proposal_pipeline_service.py to keep files under 500 lines.
 """
 import json
 
+from app.services.proposal_formatters import render_missing_alerts
+
 
 def sse_event(event_type: str, data: dict) -> str:
     """Format SSE event string."""
@@ -385,16 +387,9 @@ def _format_checklist_summary(output: dict) -> str:
             for i, step in enumerate(ns, 1):
                 lines.append(f"{i}. {step}")
 
-    # 抜け漏れアラート（必須スロット未充足）を markdown で可視化
-    alerts = output.get("missing_alerts", [])
-    if alerts:
-        lines.append("\n### ⚠️ 抜け漏れアラート（提案に必要な情報）")
-        lines.append("**要対応（未充足）**" if output.get("missing_alerts_blocking") else f"確認事項 {len(alerts)} 件")
-        for a in alerts:
-            lines.append(f"- **{a.get('label', '')}**: {a.get('reason', '')}")
-            if a.get("question_example"):
-                lines.append(f"  - 質問例: {a['question_example']}")
-
+    alert_md = render_missing_alerts(output)
+    if alert_md:
+        lines.append(alert_md)
     return "\n".join(lines)
 
 
@@ -452,6 +447,9 @@ def _format_checklist_section(output: dict) -> str:
             q = item.get("question_example", "")
             if q:
                 lines.append(f"  *質問例: {q}*")
+    alert_md = render_missing_alerts(output)
+    if alert_md:
+        lines.append(alert_md)
     return "\n".join(lines)
 
 

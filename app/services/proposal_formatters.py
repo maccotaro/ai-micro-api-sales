@@ -1,6 +1,21 @@
 """Formatters for Stage 6-10 output display in SSE streaming."""
 
 
+def render_missing_alerts(output: dict) -> str:
+    """Render Stage 5 抜け漏れアラート (missing required-slot) as markdown."""
+    alerts = output.get("missing_alerts", [])
+    if not alerts:
+        return ""
+    out = ["\n### ⚠️ 抜け漏れアラート（提案に必要な情報）",
+           "**要対応（未充足）**" if output.get("missing_alerts_blocking")
+           else f"確認事項 {len(alerts)} 件"]
+    for a in alerts:
+        out.append(f"- **{a.get('label', '')}**: {a.get('reason', '')}")
+        if a.get("question_example"):
+            out.append(f"  - 質問例: {a['question_example']}")
+    return "\n".join(out)
+
+
 def format_stage6(out: dict) -> str:
     """Format Stage 6 (Proposal Context Collection) for display."""
     parts = []
