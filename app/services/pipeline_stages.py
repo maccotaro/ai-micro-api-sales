@@ -356,9 +356,7 @@ async def _call_llm(
     estimated_input = (len(final_prompt) + len(user_msg)) // 3
     max_tokens = stage_cfg.max_tokens
     if not max_tokens:
-        # Output ceiling raised 4096->8192: Stage 5 (checklist+fact_check+
-        # reference_documents) and Stage 2/9 can exceed 4096 output tokens and
-        # were truncated mid-JSON. Requires chat_num_ctx >= ~12k for headroom.
+        # Output ceiling 8192 (was 4096): Stage 5 等の長い JSON 截断を防止。要 chat_num_ctx>=~12k
         max_tokens = min(8192, max(512, context_len - estimated_input - 256))
         logger.info(
             "Stage %d: dynamic max_tokens=%d (context=%d, est_input=%d)",
