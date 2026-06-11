@@ -16,22 +16,35 @@ def render_missing_alerts(output: dict) -> str:
     return "\n".join(out)
 
 
+def _ctx_excerpt(item, n: int = 90) -> str:
+    """One-line excerpt of a context item (string chunk or dict)."""
+    if isinstance(item, dict):
+        item = (item.get("title") or item.get("achievement") or item.get("company_name")
+                or item.get("content") or item.get("store_name") or str(item))
+    return " ".join(str(item).split())[:n] + ("…" if len(" ".join(str(item).split())) > n else "")
+
+
 def format_stage6(out: dict) -> str:
-    """Format Stage 6 (Proposal Context Collection) for display."""
-    parts = []
-    if out.get("proposal_kb_chunks"):
-        parts.append(f"提案書KB: {len(out['proposal_kb_chunks'])}件")
-    if out.get("end_user_psychology_chunks"):
-        parts.append(f"エンドユーザー心理: {len(out['end_user_psychology_chunks'])}件")
-    if out.get("decision_maker_psychology_chunks"):
-        parts.append(f"担当者心理: {len(out['decision_maker_psychology_chunks'])}件")
-    if out.get("success_cases"):
-        parts.append(f"成功事例: {len(out['success_cases'])}件")
-    if out.get("publication_records"):
-        parts.append(f"実績データ: {len(out['publication_records'])}件")
-    if parts:
-        return "## 提案コンテキスト収集\n\n" + "\n".join(f"- {p}" for p in parts)
-    return "## 提案コンテキスト収集\n\n（データなし）"
+    """Format Stage 6 (Proposal Context Collection): list collected items with excerpts."""
+    lines = ["## 提案コンテキスト収集"]
+    sections = [
+        ("提案書KB（戦略・事例）", out.get("proposal_kb_chunks")),
+        ("エンドユーザー心理", out.get("end_user_psychology_chunks")),
+        ("担当者心理", out.get("decision_maker_psychology_chunks")),
+        ("成功事例", out.get("success_cases")),
+        ("掲載実績データ", out.get("publication_records")),
+    ]
+    for title, items in sections:
+        if not items:
+            continue
+        lines.append(f"\n### {title}（{len(items)}件）")
+        for it in items[:5]:
+            lines.append(f"- {_ctx_excerpt(it)}")
+        if len(items) > 5:
+            lines.append(f"- …他 {len(items) - 5} 件")
+    if len(lines) == 1:
+        return "## 提案コンテキスト収集\n\n（データなし）"
+    return "\n".join(lines)
 
 
 def format_stage7(out: dict) -> str:
