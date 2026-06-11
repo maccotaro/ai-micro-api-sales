@@ -259,6 +259,8 @@ class ProposalPipelineService:
                     shared_memory=shared_memory,
                     message_bus=message_bus,
                     resume_start_stage=resume_start_stage,
+                    user_roles=user_roles,
+                    user_clearance_level=user_clearance_level,
                 ):
                     if isinstance(sse_or_result, str):
                         yield sse_or_result
@@ -385,6 +387,8 @@ class ProposalPipelineService:
         shared_memory=None,
         message_bus=None,
         resume_start_stage: int = 0,
+        user_roles: Optional[list[str]] = None,
+        user_clearance_level: Optional[str] = None,
     ):
         """Execute Stage 6-10, yielding SSE events and final dict result."""
         run_id_str = str(run_id) if run_id else None
