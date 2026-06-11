@@ -431,7 +431,8 @@ class ProposalPipelineService:
                     out = await stage9_story_structure(
                         outputs.get(1, {}), outputs[7], outputs[8],
                         config, self.llm_client, tenant_id, run_id_str,
-                        persona_id=persona_id,
+                        persona_id=persona_id, stage2_output=outputs.get(2, {}),
+                        stage6_output=outputs.get(6, {}), meeting=context.get("meeting", {}),
                     )
                 elif sn == 10:
                     out = await stage10_page_generation(

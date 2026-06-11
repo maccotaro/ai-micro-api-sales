@@ -24,8 +24,9 @@ from app.services.pipeline_stages import _search_kbs, _call_llm, _build_issues_s
 from app.services.pipeline_helpers import parse_json_response
 from app.services.proposal_pipeline_prompts import (
     build_stage7_prompt, build_stage8_prompt,
-    build_stage9_prompt, build_stage10_page_prompt,
+    build_stage10_page_prompt,
 )
+from app.services.proposal_blueprint import build_story_structure
 from app.utils.markdown_table_fixer import fix_markdown_tables
 from app.services.proposal_data_loaders import (
     load_success_cases, load_publication_records_for_proposal,
@@ -181,39 +182,35 @@ async def stage9_story_structure(
     tenant_id: UUID,
     pipeline_run_id: Optional[str] = None,
     persona_id: Optional[str] = None,
+    stage2_output: Optional[dict] = None,
+    stage6_output: Optional[dict] = None,
+    meeting: Optional[dict] = None,
 ) -> dict:
-    """Design the proposal document's story structure."""
-    stage_cfg = config.get_stage(9)
+    """Design the proposal document's story structure.
 
-    prompt = build_stage9_prompt(
-        stage1_issues=stage1_output.get("issues", []),
-        stage7_output=stage7_output,
-        stage8_output=stage8_output,
-    )
-
-    result = await _call_llm(
-        llm_client, prompt, stage_cfg, tenant_id, 9, pipeline_run_id,
-        persona_id=persona_id,
-    )
-
-    # Validate page count range.
-    # The reference brand deck (サンエス) is 13 pages; a blueprint-driven
-    # structure (fixed core + variable sections) legitimately exceeds 10.
-    # We no longer silently truncate to 10 — instead cap at a higher,
-    # configurable max and renumber, logging what was dropped (no silent loss).
-    pages = result.get("pages", [])
+    Blueprint-driven (PoC): the page structure is built deterministically from
+    a generalized proposal blueprint (fixed core + variable/conditional sections
+    bound to Stage 6/7/8/2 outputs). This replaces the previous free-form LLM
+    generation so the brand deck structure (reference: サンエス, 13p) is
+    reproducible and the page count scales with available data.
+    """
     max_pages = _resolve_max_pages(config)
-    if len(pages) < 5:
-        logger.warning("Stage 9 produced %d pages (< 5), using as-is", len(pages))
-    elif len(pages) > max_pages:
-        logger.warning(
-            "Stage 9 produced %d pages (> %d max), capping to %d (dropped %d)",
-            len(pages), max_pages, max_pages, len(pages) - max_pages,
-        )
-        result["pages"] = pages[:max_pages]
-        result["pages_capped_from"] = len(pages)
+    result = build_story_structure(
+        stage1=stage1_output,
+        stage2=stage2_output or {},
+        stage6=stage6_output or {},
+        stage7=stage7_output,
+        stage8=stage8_output,
+        meeting=meeting or {},
+        max_pages=max_pages,
+    )
 
-    result["_prompt"] = prompt
+    pages = result.get("pages", [])
+    if len(pages) < 5:
+        logger.warning("Blueprint produced %d pages (< 5), using as-is", len(pages))
+    logger.info("Stage 9 blueprint-driven: %d pages", len(pages))
+
+    result["_prompt"] = "(blueprint-driven; LLM free-form Stage 9 disabled)"
     return result
 
 
