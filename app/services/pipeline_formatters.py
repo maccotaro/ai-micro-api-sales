@@ -100,11 +100,7 @@ def _format_page_generation(output: dict) -> str:
 
 
 def format_stage_output(stage_num: int, output: dict) -> str:
-    """Format a stage output as markdown using the appropriate formatter.
-
-    Stages 6-9 delegate to proposal_formatters so stored sections (history
-    re-view) match the live SSE rendering instead of dumping raw JSON.
-    """
+    """Format a stage output as markdown (stages 6-9 delegate to proposal_formatters)."""
     from app.services.proposal_formatters import (
         format_stage6, format_stage7, format_stage8, format_stage9,
     )
@@ -388,6 +384,16 @@ def _format_checklist_summary(output: dict) -> str:
             lines.append("\n### 次のステップ")
             for i, step in enumerate(ns, 1):
                 lines.append(f"{i}. {step}")
+
+    # 抜け漏れアラート（必須スロット未充足）を markdown で可視化
+    alerts = output.get("missing_alerts", [])
+    if alerts:
+        lines.append("\n### ⚠️ 抜け漏れアラート（提案に必要な情報）")
+        lines.append("**要対応（未充足）**" if output.get("missing_alerts_blocking") else f"確認事項 {len(alerts)} 件")
+        for a in alerts:
+            lines.append(f"- **{a.get('label', '')}**: {a.get('reason', '')}")
+            if a.get("question_example"):
+                lines.append(f"  - 質問例: {a['question_example']}")
 
     return "\n".join(lines)
 

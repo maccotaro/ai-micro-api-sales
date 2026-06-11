@@ -196,7 +196,7 @@ async def stage2_reverse_planning(
     prompt = STAGE2_SYSTEM_PROMPT.format(
         stage1_output=stage1_summary or json.dumps(stage1_output, ensure_ascii=False, indent=2)[:2000],
         kb_context=build_kb_context_block(kb_results),
-        product_data=json.dumps(context["product_data"][:5], ensure_ascii=False, indent=2)[:1500],
+        product_data=json.dumps(context["product_data"][:15], ensure_ascii=False, indent=2)[:3000],
         simulation_data=json.dumps(sim_data[:3], ensure_ascii=False, indent=2)[:800],
         wage_data=json.dumps(wage[:3], ensure_ascii=False, indent=2)[:600],
         publication_data=json.dumps(context.get("publication_data", [])[:3], ensure_ascii=False, indent=2)[:800],

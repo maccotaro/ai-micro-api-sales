@@ -6,6 +6,7 @@ All functions load read-only data from salesdb for pipeline context.
 import logging
 from datetime import date, datetime
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.master import (
@@ -21,7 +22,11 @@ def load_product_data(db: Session, meeting_data: dict) -> list[dict]:
     query = db.query(MediaPricing)
     area = meeting_data.get("area")
     if area:
-        query = query.filter(MediaPricing.area.in_([area, "全国"]))
+        # area一致(対象エリア/全国)に加え、area未設定(NULL=全エリア共通)の商品も含める。
+        # NULL を除外すると 松竹梅 に使える商品が枯渇し、LLM が価格を捏造しがちなため。
+        query = query.filter(
+            or_(MediaPricing.area.in_([area, "全国"]), MediaPricing.area.is_(None))
+        )
 
     pricings = query.order_by(
         MediaPricing.media_name,
