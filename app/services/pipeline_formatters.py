@@ -85,20 +85,48 @@ def format_context_summary(context: dict) -> str:
     return "\n".join(lines)
 
 
+def _format_page_generation(output: dict) -> str:
+    """Format Stage 10 page generation as a summary (avoid dumping all markdown)."""
+    pages = output.get("pages", [])
+    if not pages:
+        return ""
+    lines = [f"提案書ドキュメントを生成しました（全 {len(pages)} ページ）。", ""]
+    for p in pages:
+        lines.append(f"{p.get('page_number', '')}. {p.get('title', '')}")
+    if output.get("document_id"):
+        lines.append("")
+        lines.append("※「提案書を開く」からブランド体裁のスライドを表示・エクスポートできます。")
+    return "\n".join(lines)
+
+
 def format_stage_output(stage_num: int, output: dict) -> str:
-    """Format a stage output as markdown using the appropriate formatter."""
+    """Format a stage output as markdown using the appropriate formatter.
+
+    Stages 6-9 delegate to proposal_formatters so stored sections (history
+    re-view) match the live SSE rendering instead of dumping raw JSON.
+    """
+    from app.services.proposal_formatters import (
+        format_stage6, format_stage7, format_stage8, format_stage9,
+    )
     formatters = {
         1: _format_issues,
         2: _format_proposals,
         3: _format_action_plan,
         4: _format_ad_copy,
         5: _format_checklist_summary,
+        6: format_stage6,
+        7: format_stage7,
+        8: format_stage8,
+        9: format_stage9,
+        10: _format_page_generation,
     }
     formatter = formatters.get(stage_num)
     if formatter:
         result = formatter(output)
         if result.strip():
             return result
+        # Registered formatter but no content → friendly message (no raw JSON dump)
+        return "（このステージで表示できるデータはありませんでした）"
     if "raw_response" in output:
         return f"```\n{output['raw_response']}\n```"
     return f"```json\n{json.dumps(output, ensure_ascii=False, indent=2)}\n```"
