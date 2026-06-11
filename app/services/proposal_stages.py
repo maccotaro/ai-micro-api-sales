@@ -74,8 +74,8 @@ async def stage6_proposal_context(
     issues_sum = _build_issues_summary(stage1_output, meeting)
     # clearance 未伝播だと api-rag が public 扱いし internal 文書を全除外→0件(Stage6空の原因)
     kb_results = await _search_kbs(
-        stage6_categories, meeting, tenant_id, issues_summary=issues_sum,
-        user_id=user_id, user_roles=user_roles, user_clearance_level=user_clearance_level,
+        stage6_categories, meeting, tenant_id, issues_summary=issues_sum, user_id=user_id,
+        user_roles=user_roles, user_clearance_level=user_clearance_level,
     )
 
     # Success case embeddings
