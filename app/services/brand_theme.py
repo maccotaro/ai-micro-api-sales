@@ -126,6 +126,56 @@ footer {{
 section::after {{
   color: {BRAND_NAVY};
   font-size: 11px;
+}}
+/* --- Layout components (reference brand deck) --- */
+.cards {{
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+}}
+.card {{
+  flex: 1;
+  border: 1px solid {BRAND_CYAN};
+  border-radius: 8px;
+  padding: 14px 14px 12px;
+  background: #ffffff;
+}}
+.card .num {{
+  display: inline-block;
+  width: 30px; height: 30px; line-height: 30px;
+  border-radius: 50%;
+  background: {BRAND_CYAN};
+  color: #fff; text-align: center; font-weight: 700;
+  margin-bottom: 6px;
+}}
+.card .ttl {{
+  color: {BRAND_NAVY}; font-weight: 700; font-size: 16px; margin: 4px 0;
+}}
+.card .body {{ font-size: 13px; color: #444; }}
+.cmp {{
+  display: flex; gap: 16px; margin-top: 12px;
+}}
+.cmp .col {{
+  flex: 1; border-radius: 8px; padding: 12px 14px;
+}}
+.cmp .col.left {{ background: #eef0f2; }}
+.cmp .col.right {{ background: {BRAND_TINT}; }}
+.cmp .col .head {{ font-weight: 700; margin-bottom: 6px; color: {BRAND_NAVY}; }}
+.cmp .col.right .head {{ color: {BRAND_CYAN}; }}
+.ba {{ display: flex; gap: 16px; align-items: stretch; margin-top: 12px; }}
+.ba .col {{ flex: 1; border: 1px solid #d6e6f2; border-radius: 8px; padding: 12px; }}
+.ba .col .head {{ font-weight: 700; color: {BRAND_NAVY}; margin-bottom: 6px; }}
+.ba .col.after {{ border-color: {BRAND_CYAN}; }}
+.ba .metric {{ font-size: 13px; color: #444; }}
+.principle {{ display: flex; gap: 16px; margin-top: 12px; }}
+.principle .col {{ flex: 1; border: 1px solid #d6e6f2; border-radius: 8px; padding: 12px; }}
+.principle .col .head {{ background: {BRAND_NAVY}; color: #fff; padding: 6px 10px; border-radius: 6px; font-weight: 700; margin: -12px -12px 10px; }}
+ol.agenda {{ list-style: none; padding: 0; margin-top: 16px; }}
+ol.agenda li {{ display: flex; align-items: center; gap: 12px; margin: 10px 0; font-size: 17px; color: {BRAND_NAVY}; font-weight: 600; }}
+ol.agenda .num {{
+  display: inline-block; width: 34px; height: 34px; line-height: 34px;
+  border-radius: 50%; background: {BRAND_CYAN}; color: #fff;
+  text-align: center; font-weight: 700; font-size: 14px;
 }}"""
 
 

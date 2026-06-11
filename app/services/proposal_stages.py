@@ -27,6 +27,7 @@ from app.services.proposal_pipeline_prompts import (
     build_stage10_page_prompt,
 )
 from app.services.proposal_blueprint import build_story_structure
+from app.services.slide_components import render_section
 from app.utils.markdown_table_fixer import fix_markdown_tables
 from app.services.proposal_data_loaders import (
     load_success_cases, load_publication_records_for_proposal,
@@ -259,9 +260,33 @@ async def stage10_page_generation(
         stage6_output, stage7_output, stage8_output,
     )
 
+    # Structured stage data for deterministic component rendering.
+    component_stages = {
+        "story_theme": story_theme,
+        "stage7": stage7_output,
+        "stage8": stage8_output,
+    }
+
     # Generate each page individually
     generated_pages = []
     for page_spec in pages_spec:
+        # Deterministic brand layout for supported sections (no LLM call).
+        component_md = render_section(page_spec, component_stages)
+        if component_md is not None:
+            generated_pages.append({
+                "page_number": page_spec["page_number"],
+                "title": page_spec.get("title", ""),
+                "purpose": page_spec.get("purpose", ""),
+                "markdown_content": fix_markdown_tables(component_md),
+                "data_sources": page_spec.get("data_sources", []),
+                "generation_context": {
+                    "story_theme": story_theme,
+                    "page_spec": page_spec,
+                    "rendered_by": "component",
+                },
+            })
+            continue
+
         page_data = _extract_page_data(page_spec, all_sources)
         prompt = build_stage10_page_prompt(
             story_theme=story_theme,
