@@ -414,6 +414,8 @@ class ProposalPipelineService:
                 if sn == 6:
                     out = await stage6_proposal_context(
                         context, outputs.get(1, {}), config, db, tenant_id,
+                        user_id=user_id, user_roles=user_roles,
+                        user_clearance_level=user_clearance_level,
                     )
                 elif sn == 7:
                     out = await stage7_industry_target_analysis(

@@ -46,6 +46,9 @@ async def stage6_proposal_context(
     config: PipelineConfigData,
     db: Session,
     tenant_id: UUID,
+    user_id: Optional[UUID] = None,
+    user_roles: Optional[list[str]] = None,
+    user_clearance_level: Optional[str] = None,
 ) -> dict:
     """Collect proposal-generation context without LLM.
 
@@ -69,7 +72,11 @@ async def stage6_proposal_context(
         )
     }
     issues_sum = _build_issues_summary(stage1_output, meeting)
-    kb_results = await _search_kbs(stage6_categories, meeting, tenant_id, issues_summary=issues_sum)
+    # clearance 未伝播だと api-rag が public 扱いし internal 文書を全除外→0件(Stage6空の原因)
+    kb_results = await _search_kbs(
+        stage6_categories, meeting, tenant_id, issues_summary=issues_sum,
+        user_id=user_id, user_roles=user_roles, user_clearance_level=user_clearance_level,
+    )
 
     # Success case embeddings
     success_cases = await load_success_cases(
