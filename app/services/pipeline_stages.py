@@ -372,7 +372,8 @@ async def _call_llm(
         tenant_id=str(tenant_id),
         pipeline_stage=stage_num,
         pipeline_run_id=pipeline_run_id,
-        provider_options={"num_ctx": context_len},
+        # repetition_penalty: 反復ループ防止(Stage5 fact_checkで同一note反復→截断の対策)
+        provider_options={"num_ctx": context_len, "repetition_penalty": 1.1},
         persona_id=persona_id,
     )
 

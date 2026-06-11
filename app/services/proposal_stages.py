@@ -309,7 +309,7 @@ async def stage10_page_generation(
                 model=stage_cfg.model, temperature=stage_cfg.temperature or 0.3,
                 max_tokens=stage_cfg.max_tokens, tenant_id=str(tenant_id),
                 pipeline_stage=10, pipeline_run_id=pipeline_run_id,
-                provider_options={"num_ctx": get_chat_num_ctx()},
+                provider_options={"num_ctx": get_chat_num_ctx(), "repetition_penalty": 1.1},
                 persona_id=persona_id,
             )
 
