@@ -168,6 +168,8 @@ def build_blueprint_pages(
             "key_points": [c.get("text", "") for c in (axis.get("catchcopies", []) or [])[:5]] or [axis.get("rationale", "")],
             "data_sources": ["stage8_strategy_axes"],
             "section": "strategy_detail",
+            # index で紐付ける（LLM の id は重複し得るため。axis_id は後方互換で残す）
+            "axis_index": i - 1,
             "axis_id": axis.get("id", f"Ax-{i}"),
         })
 

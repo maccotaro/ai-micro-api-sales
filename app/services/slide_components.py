@@ -202,7 +202,12 @@ def render_section(page_spec: dict, stages: dict) -> Optional[str]:
         if section == "strategy_summary":
             return render_strategy_summary(title, axes)
         if section == "strategy_detail":
-            axis = _find_axis(axes, page_spec.get("axis_id"))
+            # index 優先（LLM の axis id は重複し得るため）。範囲外は id で後方互換。
+            idx = page_spec.get("axis_index")
+            if isinstance(idx, int) and 0 <= idx < len(axes):
+                axis = axes[idx]
+            else:
+                axis = _find_axis(axes, page_spec.get("axis_id"))
             return render_strategy_detail(title, axis)
         if section == "success_case":
             idx = page_spec.get("case_index", 0)
