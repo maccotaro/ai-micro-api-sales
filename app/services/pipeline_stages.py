@@ -22,6 +22,8 @@ from app.services.pipeline_data_loaders import (
     load_campaign_data,
 )
 from app.services.pipeline_helpers import parse_json_response, validate_evidence
+from app.services.media_filters import filter_cross_sell
+from app.services.slot_check import attach_missing_alerts
 from app.services.pipeline_prompts import (
     STAGE1_SYSTEM_PROMPT,
     STAGE2_SYSTEM_PROMPT,
@@ -203,9 +205,12 @@ async def stage2_reverse_planning(
         next_action_date=next_action_date,
         current_month=str(current_month),
         seasonal_context=seasonal_text[:500],
+        core_media=config.core_media,
     )
 
-    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=2, pipeline_run_id=pipeline_run_id, persona_id=persona_id)
+    result = await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=2, pipeline_run_id=pipeline_run_id, persona_id=persona_id)
+    # Deterministically enforce: cross-sell must exclude the core medium.
+    return filter_cross_sell(result, config.core_media)
 
 
 async def stage3_action_plan(
@@ -313,7 +318,15 @@ async def stage5_checklist_summary(
         document_links=doc_links_text[:1000],
     )
 
-    return await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=5, pipeline_run_id=pipeline_run_id, persona_id=persona_id)
+    result = await _call_llm(llm_client, prompt, stage_cfg, tenant_id, stage_num=5, pipeline_run_id=pipeline_run_id, persona_id=persona_id)
+    # 抜け漏れチェッカー: deterministically compute unmet required slots.
+    return attach_missing_alerts(
+        result,
+        parsed_json=context["meeting"].get("parsed_json"),
+        stage1_output=stage1_output,
+        stage2_output=stage2_output,
+        blocking=config.block_on_missing_slots,
+    )
 
 
 # ============================================================

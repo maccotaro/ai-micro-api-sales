@@ -84,6 +84,14 @@ def _default_kb_mapping() -> dict[str, KBMappingCategory]:
             max_chunks=5,
             label="担当者心理",
         ),
+        # アンケート結果は専用テーブルを作らず KB ドキュメントとして投入し、
+        # 原稿コンテンツ提案（Stage 6/7/8）の根拠に使う。
+        "survey_insights": KBMappingCategory(
+            used_in_stages=[6, 7, 8],
+            search_query_template="{industry} 求職者 アンケート 調査 意識 重視",
+            max_chunks=5,
+            label="アンケート・調査結果",
+        ),
     }
 
 
@@ -94,6 +102,14 @@ class PipelineConfigData(BaseModel):
     stage_config: dict[str, StageConfig] = Field(default_factory=dict)
     kb_mapping: dict[str, KBMappingCategory] = Field(default_factory=_default_kb_mapping)
     output_template: OutputTemplate = Field(default_factory=OutputTemplate)
+    # Core advertising medium for the proposal. Cross-sell suggestions must
+    # exclude this medium (PoC: proposals are centered on マイナビバイト).
+    core_media: str = "マイナビバイト"
+    # When True, the pipeline blocks generation if required slots are unmet.
+    # Default is non-blocking (warning only) for PoC demo value.
+    block_on_missing_slots: bool = False
+    # Upper bound for blueprint-driven proposal page count (was hard-coded 10).
+    max_proposal_pages: int = 20
     is_default: bool = False
 
     def get_stage(self, stage_num: int) -> StageConfig:
@@ -174,6 +190,9 @@ async def fetch_pipeline_config(tenant_id: UUID) -> PipelineConfigData:
         stage_config=stage_config,
         kb_mapping=kb_mapping,
         output_template=output_template,
+        core_media=data.get("core_media") or "マイナビバイト",
+        block_on_missing_slots=bool(data.get("block_on_missing_slots", False)),
+        max_proposal_pages=int(data.get("max_proposal_pages") or 20),
         is_default=data.get("is_default", False),
     )
 

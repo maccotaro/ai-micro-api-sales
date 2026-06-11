@@ -196,16 +196,38 @@ async def stage9_story_structure(
         persona_id=persona_id,
     )
 
-    # Validate page count range
+    # Validate page count range.
+    # The reference brand deck (サンエス) is 13 pages; a blueprint-driven
+    # structure (fixed core + variable sections) legitimately exceeds 10.
+    # We no longer silently truncate to 10 — instead cap at a higher,
+    # configurable max and renumber, logging what was dropped (no silent loss).
     pages = result.get("pages", [])
+    max_pages = _resolve_max_pages(config)
     if len(pages) < 5:
         logger.warning("Stage 9 produced %d pages (< 5), using as-is", len(pages))
-    elif len(pages) > 10:
-        logger.warning("Stage 9 produced %d pages (> 10), truncating to 10", len(pages))
-        result["pages"] = pages[:10]
+    elif len(pages) > max_pages:
+        logger.warning(
+            "Stage 9 produced %d pages (> %d max), capping to %d (dropped %d)",
+            len(pages), max_pages, max_pages, len(pages) - max_pages,
+        )
+        result["pages"] = pages[:max_pages]
+        result["pages_capped_from"] = len(pages)
 
     result["_prompt"] = prompt
     return result
+
+
+# Default upper bound for blueprint-driven page count (was hard-coded 10).
+_DEFAULT_MAX_PAGES = 20
+
+
+def _resolve_max_pages(config: PipelineConfigData) -> int:
+    """Resolve the maximum allowed page count from config, default 20."""
+    val = getattr(config, "max_proposal_pages", None)
+    try:
+        return int(val) if val else _DEFAULT_MAX_PAGES
+    except (TypeError, ValueError):
+        return _DEFAULT_MAX_PAGES
 
 
 # ============================================================
