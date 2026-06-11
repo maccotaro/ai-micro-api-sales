@@ -84,6 +84,13 @@ def _default_kb_mapping() -> dict[str, KBMappingCategory]:
             max_chunks=5,
             label="担当者心理",
         ),
+        # 成功事例も KBマッピング(admindb/api-rag)経由で取得（salesdb 直引きはしない）
+        "success_cases": KBMappingCategory(
+            used_in_stages=[6],
+            search_query_template="{industry} {area} 採用 成功事例 実績 Before After",
+            max_chunks=5,
+            label="成功事例",
+        ),
         # アンケート結果は専用テーブルを作らず KB ドキュメントとして投入し、
         # 原稿コンテンツ提案（Stage 6/7/8）の根拠に使う。
         "survey_insights": KBMappingCategory(

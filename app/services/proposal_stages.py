@@ -30,7 +30,7 @@ from app.services.proposal_blueprint import build_story_structure
 from app.services.slide_components import render_section
 from app.utils.markdown_table_fixer import fix_markdown_tables
 from app.services.proposal_data_loaders import (
-    load_success_cases, load_publication_records_for_proposal,
+    load_publication_records_for_proposal,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,20 +69,15 @@ async def stage6_proposal_context(
             "proposal_reference",
             "target_psychology_end_user",
             "target_psychology_decision_maker",
+            "success_cases",
         )
     }
     issues_sum = _build_issues_summary(stage1_output, meeting)
     # clearance 未伝播だと api-rag が public 扱いし internal 文書を除外→Stage6空になるため必ず渡す
     kb_results = await _search_kbs(stage6_categories, meeting, tenant_id, issues_summary=issues_sum, user_id=user_id, user_roles=user_roles, user_clearance_level=user_clearance_level)
 
-    # Success case embeddings
-    success_cases = await load_success_cases(
-        industry=meeting.get("industry", ""),
-        area=meeting.get("area", ""),
-        tenant_id=tenant_id,
-    )
-
-    # Publication records (high-performing)
+    # 成功事例も KBマッピング(admindb/api-rag)経由で取得する。salesdb 直引きは設計不整合のため不採用。
+    # 掲載実績(数値データ)のみ salesdb の構造化テーブルから取得（KB文書ではないため）。
     pub_records = load_publication_records_for_proposal(
         db=db,
         industry=meeting.get("industry", ""),
@@ -93,7 +88,7 @@ async def stage6_proposal_context(
         "proposal_kb_chunks": kb_results.get("proposal_reference", []),
         "end_user_psychology_chunks": kb_results.get("target_psychology_end_user", []),
         "decision_maker_psychology_chunks": kb_results.get("target_psychology_decision_maker", []),
-        "success_cases": success_cases,
+        "success_cases": kb_results.get("success_cases", []),
         "publication_records": pub_records,
     }
 
