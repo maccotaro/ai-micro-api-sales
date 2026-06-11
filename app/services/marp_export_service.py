@@ -14,6 +14,7 @@ from fastapi.responses import Response
 
 from app.core.config import settings
 from app.models.proposal_document import ProposalDocument
+from app.services.brand_theme import brand_marp_frontmatter
 
 logger = logging.getLogger(__name__)
 
@@ -21,113 +22,12 @@ EXPORT_TIMEOUT = 120.0
 
 
 def _build_marp_markdown(doc: ProposalDocument) -> str:
-    """Concatenate all pages into a single Marp-compatible Markdown."""
-    theme = doc.marp_theme or "default"
-    title = (doc.title or "提案書").replace('"', '\\"')
-    frontmatter = f"""---
-marp: true
-html: true
-theme: {theme}
-paginate: true
-size: 16:9
-footer: "{title}"
-style: |
-  section {{
-    font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'YuGothic', sans-serif;
-    font-size: 14px;
-    line-height: 1.4;
-    padding: 30px 50px;
-    overflow: hidden;
-  }}
-  section.lead {{
-    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
-    color: white;
-    text-align: center;
-    justify-content: center;
-  }}
-  section.lead h1 {{
-    color: #60a5fa;
-    font-size: 36px;
-    margin-bottom: 0.3em;
-    border: none;
-  }}
-  section.lead h2 {{
-    color: #94a3b8;
-    font-size: 20px;
-    border: none;
-  }}
-  section.lead p {{
-    color: #cbd5e1;
-  }}
-  h1 {{
-    color: #1e3a5f;
-    font-size: 28px;
-    border-bottom: 3px solid #3b82f6;
-    padding-bottom: 8px;
-    margin-bottom: 12px;
-  }}
-  h2 {{
-    color: #1e40af;
-    font-size: 20px;
-    border-bottom: 2px solid #93c5fd;
-    padding-bottom: 4px;
-    margin-top: 8px;
-    margin-bottom: 6px;
-  }}
-  h3 {{
-    font-size: 16px;
-    color: #334155;
-  }}
-  strong {{
-    color: #dc2626;
-  }}
-  table {{
-    font-size: 13px;
-    width: 100%;
-    border-collapse: collapse;
-    margin: 6px 0;
-  }}
-  th {{
-    background: #1e3a5f;
-    color: white;
-    padding: 5px 10px;
-    text-align: left;
-    font-weight: 600;
-  }}
-  td {{
-    padding: 4px 10px;
-    border-bottom: 1px solid #e2e8f0;
-  }}
-  section:not(.lead) tr:nth-child(even) td {{
-    background: #f8fafc;
-  }}
-  ul, ol {{
-    font-size: 14px;
-    line-height: 1.5;
-    margin: 6px 0;
-  }}
-  blockquote {{
-    border-left: 4px solid #3b82f6;
-    background: #eff6ff;
-    padding: 8px 12px;
-    margin: 8px 0;
-    font-size: 13px;
-    border-radius: 0 6px 6px 0;
-    color: #475569;
-  }}
-  code {{
-    background: #f1f5f9;
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-size: 12px;
-  }}
-  footer {{
-    font-size: 10px;
-    color: #94a3b8;
-  }}
----
+    """Concatenate all pages into a single Marp-compatible Markdown.
 
-"""
+    Uses the マイナビバイト brand theme (app.services.brand_theme) so the
+    exported PPTX/PDF matches the reference brand deck.
+    """
+    frontmatter = brand_marp_frontmatter(doc.title or "提案書")
     pages_sorted = sorted(doc.pages, key=lambda p: p.page_number)
     page_markdowns = []
     for i, p in enumerate(pages_sorted):
