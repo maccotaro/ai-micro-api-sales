@@ -84,7 +84,14 @@ def build_stage7_prompt(
         "actual_reality": "実態の説明"
       }}
     ],
-    "competitive_advantages": ["この業界/職種の競合優位性"]
+    "competitive_advantages": ["この業界/職種の競合優位性"],
+    "confusable_segments": {{
+      "target_segment": "本案件で募集する職種・領域",
+      "confused_with": "求職者が混同しやすい類似職種・領域（無ければ空文字）",
+      "comparison_rows": [
+        {{"aspect": "比較観点（例: 主な現場/主な業務/環境/体力負担/勤務時間/スキル）", "target": "募集側の内容", "other": "混同先の内容"}}
+      ]
+    }}
   }},
   "target_insights": {{
     "primary_target": "主要ターゲット層",

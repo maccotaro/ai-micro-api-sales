@@ -112,6 +112,25 @@ def render_strategy_detail(title: str, axis: dict) -> Optional[str]:
     return _header(title) + (body or "—\n")
 
 
+def render_segment_comparison(title: str, industry_analysis: dict) -> Optional[str]:
+    """比較表: 募集職種 vs 混同されやすい類似職種（reference: 施設警備 vs 交通誘導）."""
+    seg = (industry_analysis or {}).get("confusable_segments") or {}
+    rows = seg.get("comparison_rows") or []
+    confused = seg.get("confused_with")
+    if not rows or not confused:
+        return None  # no structured comparison data → LLM fallback
+    target_h = _esc(seg.get("target_segment") or "募集職種")
+    other_h = _esc(confused)
+    body_rows = "\n".join(
+        f"| {_esc(r.get('aspect'))} | {_esc(r.get('target'))} | {_esc(r.get('other'))} |"
+        for r in rows
+    )
+    return _header(title) + (
+        f"| 観点 | {target_h} | {other_h} |\n"
+        "|---|---|---|\n" + body_rows + "\n"
+    )
+
+
 def render_success_case(title: str, case: dict) -> Optional[str]:
     if not case:
         return None
@@ -146,7 +165,7 @@ def render_success_case(title: str, case: dict) -> Optional[str]:
 
 # Sections rendered deterministically; everything else falls back to the LLM.
 _DETERMINISTIC = {
-    "cover", "agenda", "principles", "misconception",
+    "cover", "agenda", "principles", "misconception", "segment_comparison",
     "target_psychology", "strategy_summary", "strategy_detail", "success_case",
 }
 
@@ -176,6 +195,8 @@ def render_section(page_spec: dict, stages: dict) -> Optional[str]:
             return render_principles(title)
         if section == "misconception":
             return render_misconception(title, ind)
+        if section == "segment_comparison":
+            return render_segment_comparison(title, ind)
         if section == "target_psychology":
             return render_target_psychology(title, ti)
         if section == "strategy_summary":

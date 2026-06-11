@@ -66,6 +66,17 @@ class TestRenderSection:
         out = render_section({"section": "strategy_detail", "title": "T", "axis_id": "Ax-1"}, _stages())
         assert "快適な守衛業務" in out
 
+    def test_segment_comparison_with_data(self):
+        stages = {"stage7": {"industry_analysis": {"confusable_segments": {
+            "target_segment": "施設警備", "confused_with": "交通誘導警備",
+            "comparison_rows": [{"aspect": "環境", "target": "屋内", "other": "屋外"}]}}}, "stage8": {}}
+        out = render_section({"section": "segment_comparison", "title": "違い"}, stages)
+        assert out and "施設警備" in out and "交通誘導警備" in out and "屋内" in out
+
+    def test_segment_comparison_without_data_falls_back(self):
+        stages = {"stage7": {"industry_analysis": {}}, "stage8": {}}
+        assert render_section({"section": "segment_comparison", "title": "X"}, stages) is None
+
     def test_empty_data_returns_none_for_conditional(self):
         empty = {"story_theme": "", "stage7": {}, "stage8": {}}
         assert render_section({"section": "misconception", "title": "X"}, empty) is None
