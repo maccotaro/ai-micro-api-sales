@@ -30,9 +30,8 @@ BRAND_MARP_CSS = f"""section {{
   color: #222222;
   background: #ffffff;
   overflow: hidden;
-  justify-content: flex-start;
 }}
-section:not(.lead) {{ justify-content: flex-start; align-items: stretch; }}
+section:not(.lead) {{ justify-content: flex-start !important; align-items: stretch !important; }}
 section:not(.lead) h1 {{
   position: absolute;
   top: 0; left: 0; right: 0;
