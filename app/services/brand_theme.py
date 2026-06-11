@@ -30,7 +30,9 @@ BRAND_MARP_CSS = f"""section {{
   color: #222222;
   background: #ffffff;
   overflow: hidden;
+  justify-content: flex-start;
 }}
+section:not(.lead) {{ justify-content: flex-start; align-items: stretch; }}
 section:not(.lead) h1 {{
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -176,7 +178,26 @@ ol.agenda .num {{
   display: inline-block; width: 34px; height: 34px; line-height: 34px;
   border-radius: 50%; background: {BRAND_CYAN}; color: #fff;
   text-align: center; font-weight: 700; font-size: 14px;
-}}"""
+}}
+/* --- principles 2-col step flow --- */
+.cols {{ display: flex; gap: 24px; margin-top: 6px; }}
+.cols .col {{ flex: 1; }}
+.colhead {{ background: {BRAND_NAVY}; color: #fff; font-weight: 700; padding: 8px 12px; border-radius: 6px; text-align: center; font-size: 15px; }}
+.step {{ border: 1px solid #cfe6f4; border-radius: 8px; padding: 9px 12px; margin: 9px 0; }}
+.step .t {{ color: {BRAND_NAVY}; font-weight: 700; font-size: 14px; }}
+.step .d {{ font-size: 13px; color: #555; }}
+.arrow {{ text-align: center; color: {BRAND_CYAN}; font-size: 15px; margin: -3px 0; }}
+.concl {{ text-align: center; color: {BRAND_CYAN}; font-weight: 700; border-top: 2px solid {BRAND_CYAN}; margin-top: 8px; padding-top: 6px; }}
+/* --- strategy: paradigm + merits + catchcopy --- */
+.para {{ display: flex; align-items: center; gap: 12px; background: {BRAND_TINT}; border-radius: 8px; padding: 12px; margin: 12px 0; }}
+.para .old {{ background: #e3e7ea; padding: 8px 14px; border-radius: 6px; font-weight: 700; color: #555; }}
+.para .new {{ background: #fff; border: 2px solid {BRAND_CYAN}; padding: 8px 14px; border-radius: 6px; font-weight: 700; color: {BRAND_NAVY}; }}
+.para .ar {{ color: {BRAND_CYAN}; font-weight: 700; }}
+.merits {{ display: flex; gap: 10px; margin: 12px 0; }}
+.merit {{ flex: 1; border: 1px solid {BRAND_CYAN}; border-top: 4px solid {BRAND_CYAN}; border-radius: 8px; text-align: center; padding: 12px 4px; font-weight: 700; color: {BRAND_NAVY}; font-size: 14px; }}
+.cc {{ background: {BRAND_TINT}; border-radius: 8px; padding: 12px 16px; }}
+.cc .h {{ color: {BRAND_CYAN}; font-weight: 700; margin-bottom: 6px; }}
+.cc ul {{ margin: 0; }}"""
 
 
 def brand_marp_frontmatter(title: str) -> str:

@@ -27,7 +27,12 @@ def _header(title: str) -> str:
 
 def render_cover(title: str, theme: str) -> str:
     # First page gets `_class: lead` applied by marp_export; keep it heading-based.
-    return f"# {title}\n\n## 採用成功に向けて\n\n{theme}\n"
+    # title と theme が同一になりがちなので重複表示を避ける。
+    sub = "採用成功に向けたご提案"
+    body = f"# {title}\n\n## {sub}\n"
+    if theme and theme.strip() and theme.strip() not in title:
+        body += f"\n{theme}\n"
+    return body
 
 
 def render_agenda(title: str, items: list[str]) -> str:
@@ -38,13 +43,25 @@ def render_agenda(title: str, items: list[str]) -> str:
     return _header(title) + f'<ol class="agenda">\n{lis}\n</ol>\n'
 
 
+def _step(t: str, d: str) -> str:
+    return f'<div class="step"><div class="t">{t}</div><div class="d">{d}</div></div>'
+
+
 def render_principles(title: str) -> str:
+    """固定テンプレ: 応募獲得最大化のSEO/CVR 3ステップフロー（業界非依存の方法論）。"""
+    seo = (_step("Googleの理念", "検索意図に「最適な答え」を出す") + '<div class="arrow">↓</div>'
+           + _step("E-E-A-Tの重視", "経験・専門性・権威性・信頼性が順位を決める") + '<div class="arrow">↓</div>'
+           + _step("重複コンテンツはリスク", "似た原稿は検索結果から除外される可能性")
+           + '<div class="concl">独自性と具体性が必要</div>')
+    cvr = (_step("入口と出口の整合性", "「検索条件」と「原稿内容」の一致を求める") + '<div class="arrow">↓</div>'
+           + _step("NG例：情報の不一致", "「主婦歓迎」なのに男性写真ばかり→離脱増") + '<div class="arrow">↓</div>'
+           + _step("可視化による安心感", "写真・具体的な言葉で応募の不安を払拭")
+           + '<div class="concl">透明性と安心感が必要</div>')
     return _header(title) + (
-        '<div class="principle">\n'
-        '  <div class="col"><div class="head">SEOの観点（集客の最大化）</div>'
-        '検索意図に最適な答えを示し、独自性・具体性で上位表示を狙う。</div>\n'
-        '  <div class="col"><div class="head">CVRの観点（応募率の向上）</div>'
-        '検索条件と原稿内容を一致させ、透明性と安心感で応募に導く。</div>\n'
+        '<h2>応募獲得の最大化には、ユーザー体験の向上と有益で正しい情報が必要です</h2>\n'
+        '<div class="cols">\n'
+        f'  <div class="col"><div class="colhead">SEOの観点（集客の最大化）</div>{seo}</div>\n'
+        f'  <div class="col"><div class="colhead">CVRの観点（応募率の向上）</div>{cvr}</div>\n'
         '</div>\n'
     )
 
@@ -97,19 +114,30 @@ def render_strategy_summary(title: str, axes: list) -> Optional[str]:
 
 
 def render_strategy_detail(title: str, axis: dict) -> Optional[str]:
+    """paradigm(旧→新) + merits(5カード) + 簡潔キャッチコピー。スロットが無い分は省略。"""
     if not axis:
         return None
-    copies = (axis.get("catchcopies") or [])
-    body = ""
-    if axis.get("rationale"):
-        body += f"{_esc(axis['rationale'])}\n\n"
+    html = _header(title)
+    para = axis.get("paradigm") or {}
+    if para.get("old") or para.get("new"):
+        html += (
+            '<div class="para">'
+            f'<div class="old">従来「{_esc(para.get("old"))}」</div>'
+            '<div class="ar">パラダイムシフト ▶</div>'
+            f'<div class="new">新定義「{_esc(para.get("new"))}」</div>'
+            '</div>\n'
+        )
+    merits = [m for m in (axis.get("merits") or []) if m][:5]
+    if merits:
+        cards = "".join(f'<div class="merit">{_esc(m)}</div>' for m in merits)
+        html += f'<div class="merits">{cards}</div>\n'
+    copies = [c for c in (axis.get("catchcopies") or []) if c.get("text")][:3]
     if copies:
-        body += "**キャッチコピー例**\n\n"
-        body += "\n".join(
-            f"- {_esc(c.get('text'))}" + (f"（{_esc(c.get('psychology_link'))}）" if c.get("psychology_link") else "")
-            for c in copies[:6]
-        ) + "\n"
-    return _header(title) + (body or "—\n")
+        lis = "".join(f"<li>{_esc(c.get('text'))}</li>" for c in copies)
+        html += f'<div class="cc"><div class="h">キャッチコピー例</div><ul>{lis}</ul></div>\n'
+    if not (para or merits or copies):
+        html += f"{_esc(axis.get('rationale') or '')}\n"
+    return html
 
 
 def render_segment_comparison(title: str, industry_analysis: dict) -> Optional[str]:
