@@ -151,7 +151,10 @@ async def list_pipeline_runs(
     rows = db.execute(text(f"""
         SELECT id, minute_id, status, total_duration_ms,
                created_at, error_stage, error_message,
-               minio_object_key
+               minio_object_key,
+               (SELECT d.id FROM proposal_documents d
+                WHERE d.pipeline_run_id = proposal_pipeline_runs.id
+                ORDER BY d.created_at DESC LIMIT 1) AS document_id
         FROM proposal_pipeline_runs
         {where_clause}
         ORDER BY created_at DESC
@@ -180,6 +183,7 @@ async def list_pipeline_runs(
                 "error_stage": r[5],
                 "error_message": r[6],
                 "minio_object_key": r[7],
+                "document_id": str(r[8]) if r[8] else None,
             }
             for r in rows
         ],
@@ -203,7 +207,10 @@ async def get_pipeline_run(
                r.created_at, r.error_stage, r.error_message,
                r.stage_results, r.sections,
                m.company_name, m.industry,
-               r.minio_object_key
+               r.minio_object_key,
+               (SELECT d.id FROM proposal_documents d
+                WHERE d.pipeline_run_id = r.id
+                ORDER BY d.created_at DESC LIMIT 1) AS document_id
         FROM proposal_pipeline_runs r
         LEFT JOIN meeting_minutes m ON m.id = r.minute_id
         WHERE r.id = :run_id AND r.tenant_id = :tenant_id
@@ -231,6 +238,7 @@ async def get_pipeline_run(
         "company_name": row[9],
         "industry": row[10],
         "minio_object_key": row[11],
+        "document_id": str(row[12]) if row[12] else None,
     }
 
 
