@@ -262,6 +262,7 @@ async def stage10_page_generation(
     # Structured stage data for deterministic component rendering.
     component_stages = {
         "story_theme": story_theme,
+        "stage2": stage2_output,
         "stage7": stage7_output,
         "stage8": stage8_output,
     }

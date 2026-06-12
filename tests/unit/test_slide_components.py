@@ -54,9 +54,9 @@ class TestRenderSection:
         out = render_section({"section": "misconception", "title": "X"}, _stages())
         assert "屋外で過酷" in out and "屋内で空調完備" in out and 'class="cmp"' in out
 
-    def test_psychology_table(self):
+    def test_psychology_axis_rows(self):
         out = render_section({"section": "target_psychology", "title": "X"}, _stages())
-        assert "体力が不安" in out and "座り仕事を訴求" in out and "|" in out
+        assert "体力が不安" in out and "座り仕事を訴求" in out and 'class="axisrow"' in out
 
     def test_success_case_before_after(self):
         out = render_section({"section": "success_case", "title": "X", "case_index": 0}, _stages())

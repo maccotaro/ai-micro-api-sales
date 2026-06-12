@@ -263,10 +263,51 @@ def render_success_case(title: str, case: dict) -> Optional[str]:
     return body
 
 
+def render_plan(title: str, stage2: dict) -> Optional[str]:
+    """松竹梅の料金カード(推奨バッジ付)＋推奨理由バナー。stage2 が無ければ LLM へ。"""
+    proposals = (stage2 or {}).get("proposals") or []
+    if not proposals:
+        return None
+    p0 = proposals[0]
+    sb = p0.get("shochikubai") or {}
+    rec = p0.get("recommended")
+    cards = ""
+    for key, label in (("matsu", "松"), ("take", "竹"), ("ume", "梅")):
+        g = sb.get(key) or {}
+        if not g:
+            continue
+        rows = "".join(
+            f'<div class="pitem"><span>{_esc(i.get("media_name"))}</span>'
+            f'<span class="pp">{_esc(i.get("period") or "")}</span></div>'
+            for i in (g.get("items") or [])[:4]
+        )
+        price = g.get("total_price")
+        price_s = f"¥{price:,.0f}" if isinstance(price, (int, float)) else _esc(price or "—")
+        badge = '<div class="rec-badge">おすすめ</div>' if key == rec else ""
+        cls = "plan recommended" if key == rec else "plan"
+        effect = (g.get("expected_effect") or "")[:90]
+        cards += (
+            f'<div class="{cls}">{badge}'
+            f'<div class="grade">{label}</div>'
+            f'<div class="price">{price_s}</div>'
+            f'<div class="pitems">{rows}</div>'
+            + (f'<div class="peffect">{_esc(effect)}</div>' if effect else "")
+            + "</div>"
+        )
+    if not cards:
+        return None
+    html = _header(title) + f'<div class="plans">{cards}</div>\n'
+    reason = p0.get("recommendation_reason")
+    if reason:
+        html += f'<div class="improve"><span class="lbl">推奨プランの理由</span>{_esc(reason)}</div>\n'
+    return html
+
+
 # Sections rendered deterministically; everything else falls back to the LLM.
 _DETERMINISTIC = {
     "cover", "agenda", "principles", "misconception", "segment_comparison",
     "target_psychology", "strategy_summary", "strategy_detail", "success_case",
+    "plan",
 }
 
 
@@ -285,6 +326,7 @@ def render_section(page_spec: dict, stages: dict) -> Optional[str]:
     ti = s7.get("target_insights") or {}
     axes = s8.get("strategy_axes") or []
     cases = s8.get("success_case_references") or []
+    s2 = stages.get("stage2") or {}
 
     try:
         if section == "cover":
@@ -293,6 +335,8 @@ def render_section(page_spec: dict, stages: dict) -> Optional[str]:
             return render_agenda(title, page_spec.get("key_points") or [])
         if section == "principles":
             return render_principles(title)
+        if section == "plan":
+            return render_plan(title, s2)
         if section == "misconception":
             return render_misconception(title, ind)
         if section == "segment_comparison":

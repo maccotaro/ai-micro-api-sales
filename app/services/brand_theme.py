@@ -235,7 +235,20 @@ ol.agenda .num {{
 .ba .kl {{ font-size: 12px; color: #888; margin-top: 2px; }}
 .ba-ar {{ display: flex; align-items: center; color: {BRAND_CYAN}; font-weight: 700; font-size: 30px; }}
 .improve {{ background: {BRAND_TINT}; border-left: 6px solid {BRAND_RED}; border-radius: 0 8px 8px 0; padding: 18px 22px; margin-top: 24px; font-size: 16px; color: #37506b; }}
-.improve .lbl {{ color: {BRAND_RED}; font-weight: 700; margin-right: 10px; }}"""
+.improve .lbl {{ color: {BRAND_RED}; font-weight: 700; margin-right: 10px; }}
+/* --- 松竹梅 plan cards --- */
+.plans {{ display: flex; gap: 20px; margin-top: 22px; align-items: stretch; }}
+.plan {{ flex: 1; position: relative; border: 1px solid #d6e6f2; border-radius: 10px; padding: 20px 18px 16px; background: #fff; min-height: 300px; box-sizing: border-box; }}
+.plan.recommended {{ border: 2px solid {BRAND_CYAN}; background: {BRAND_TINT}; }}
+.plan .rec-badge {{ position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: {BRAND_RED}; color: #fff; font-size: 12px; font-weight: 700; padding: 3px 16px; border-radius: 12px; letter-spacing: 0.05em; }}
+.plan .grade {{ width: 46px; height: 46px; line-height: 46px; border-radius: 50%; background: {BRAND_NAVY}; color: #fff; text-align: center; font-weight: 700; font-size: 21px; margin: 0 auto 10px; }}
+.plan.recommended .grade {{ background: {BRAND_CYAN}; }}
+.plan .price {{ text-align: center; font-size: 26px; font-weight: 700; color: {BRAND_NAVY}; margin-bottom: 12px; }}
+.plan.recommended .price {{ color: {BRAND_RED}; }}
+.plan .pitems {{ border-top: 1px solid #d6e6f2; padding-top: 10px; }}
+.plan .pitem {{ display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: #444; margin: 7px 0; }}
+.plan .pitem .pp {{ color: #889ab0; font-size: 12px; white-space: nowrap; }}
+.plan .peffect {{ margin-top: 12px; font-size: 12px; color: #37506b; background: #fff; border-left: 3px solid {BRAND_CYAN}; padding: 8px 10px; }}"""
 
 
 def preview_scoped_css() -> str:
