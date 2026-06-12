@@ -25,6 +25,17 @@ def _header(title: str) -> str:
     return f"# {title}\n\n"
 
 
+def ensure_page_title(md: str, title: str) -> str:
+    """Prepend `# title` when the page Markdown lacks an H1.
+
+    LLM-generated pages sometimes omit the heading, which drops the brand
+    header bar entirely. The H1 is required by the brand layout.
+    """
+    if not title or md.lstrip().startswith("# "):
+        return md
+    return f"# {title}\n\n{md}"
+
+
 def render_cover(title: str, theme: str) -> str:
     # First page gets `_class: lead` applied by marp_export; keep it heading-based.
     # title と theme が同一になりがちなので重複表示を避ける。
@@ -88,29 +99,65 @@ def render_misconception(title: str, industry_analysis: dict) -> Optional[str]:
 
 
 def render_target_psychology(title: str, target_insights: dict) -> Optional[str]:
-    axes = (target_insights or {}).get("psychological_axes") or []
+    """心理軸ごとの横帯カード(軸名→不安・欲求→訴求方向)。表より密度が高い。"""
+    ti = target_insights or {}
+    axes = ti.get("psychological_axes") or []
     if not axes:
         return None
-    rows = "\n".join(
-        f"| {_esc(a.get('axis'))} | {_esc(a.get('detail'))} | {_esc(a.get('appeal_direction'))} |"
-        for a in axes
-    )
-    return _header(title) + (
-        "| 重視する軸 | 具体的な不安・欲求 | 訴求の方向性 |\n"
-        "|---|---|---|\n" + rows + "\n"
-    )
+    body = _header(title)
+    if ti.get("primary_target"):
+        body += (
+            '<div class="lead-psy"><span class="lbl">主要ターゲット</span>'
+            f'{_esc(ti["primary_target"])}</div>\n'
+        )
+    rows = ""
+    for a in axes[:4]:
+        rows += (
+            '<div class="axisrow">'
+            f'<div class="axname">{_esc(a.get("axis"))}</div>'
+            f'<div class="axdetail"><div class="cap">具体的な不安・欲求</div>{_esc(a.get("detail"))}</div>'
+            '<div class="axar">▶</div>'
+            f'<div class="axappeal"><div class="cap">訴求の方向性</div>{_esc(a.get("appeal_direction"))}</div>'
+            '</div>'
+        )
+    body += f'<div class="axisrows">{rows}</div>\n'
+    body += '<div class="concl">この心理軸に沿って原稿・キャッチコピーを設計します</div>\n'
+    return body
 
 
 def render_strategy_summary(title: str, axes: list) -> Optional[str]:
+    """3カード(タイトル+狙う心理+パラダイム+メリットチップ+コピー例)＋結論帯。"""
     if not axes:
         return None
-    cards = "\n".join(
-        f'  <div class="card"><div class="num">{i:02d}</div>'
-        f'<div class="ttl">{_esc(a.get("title"))}</div>'
-        f'<div class="body">{_esc(a.get("rationale") or a.get("target_psychology") or "")}</div></div>'
-        for i, a in enumerate(axes[:3], start=1)
+    cards = ""
+    for i, a in enumerate(axes[:3], start=1):
+        para = a.get("paradigm") or {}
+        pd = ""
+        if para.get("old") or para.get("new"):
+            pd = (
+                f'<div class="pd"><span class="pold">{_esc(para.get("old"))}</span>'
+                f' <span class="par">▶</span> '
+                f'<span class="pnew">{_esc(para.get("new"))}</span></div>'
+            )
+        chips = "".join(
+            f'<span class="chip">{_esc(m)}</span>'
+            for m in (a.get("merits") or [])[:5] if m
+        )
+        chips = f'<div class="chips">{chips}</div>' if chips else ""
+        copies = [c for c in (a.get("catchcopies") or []) if c.get("text")]
+        copy_line = (
+            f'<div class="copyline">例:「{_esc(copies[0]["text"])}」</div>' if copies else ""
+        )
+        cards += (
+            f'<div class="card"><div class="num">{i:02d}</div>'
+            f'<div class="ttl">{_esc(a.get("title"))}</div>'
+            f'<div class="body">{_esc(a.get("target_psychology") or a.get("rationale") or "")}</div>'
+            f'{pd}{chips}{copy_line}</div>\n'
+        )
+    return _header(title) + (
+        f'<div class="cards">\n{cards}</div>\n'
+        '<div class="concl">この3つの戦略軸で原稿を再設計し、応募獲得を最大化します</div>\n'
     )
-    return _header(title) + f'<div class="cards">\n{cards}\n</div>\n'
 
 
 def render_strategy_detail(title: str, axis: dict) -> Optional[str]:
@@ -176,34 +223,43 @@ def render_segment_comparison(title: str, industry_analysis: dict) -> Optional[s
 
 
 def render_success_case(title: str, case: dict) -> Optional[str]:
+    """Before/After を大型数値＋矢印＋改善バナーで描画(サンエス参照デッキ準拠)。"""
     if not case:
         return None
     before = case.get("before") or {}
     after = case.get("after") or {}
 
-    def _metrics(d: dict) -> str:
+    def _metrics(d: dict, big: bool) -> str:
         parts = []
         if d.get("catchcopy"):
-            parts.append(f'<div class="metric">コピー: {_esc(d["catchcopy"])}</div>')
+            parts.append(f'<div class="metric">コピー:「{_esc(d["catchcopy"])}」</div>')
+        nums = ""
         if d.get("pv") is not None:
-            parts.append(f'<div class="metric">PV: {_esc(d.get("pv"))}</div>')
+            nums += f'<div class="kpi"><div class="kv">{_esc(d.get("pv"))}</div><div class="kl">PV</div></div>'
         if d.get("applications") is not None:
-            parts.append(f'<div class="metric">応募: {_esc(d.get("applications"))}</div>')
+            cls = "kv big" if big else "kv"
+            nums += f'<div class="kpi"><div class="{cls}">{_esc(d.get("applications"))}</div><div class="kl">応募</div></div>'
+        if nums:
+            parts.append(f'<div class="kpis">{nums}</div>')
         return "".join(parts) or '<div class="metric">—</div>'
 
     summary = _esc(case.get("case_summary") or "")
     improvement = _esc(case.get("improvement") or "")
     body = _header(title)
     if summary:
-        body += f"{summary}\n\n"
+        body += (
+            '<div class="lead-psy"><span class="lbl">事例概要</span>'
+            f'{summary}</div>\n'
+        )
     body += (
         '<div class="ba">\n'
-        f'  <div class="col before"><div class="head">Before</div>{_metrics(before)}</div>\n'
-        f'  <div class="col after"><div class="head">After</div>{_metrics(after)}</div>\n'
+        f'  <div class="col before"><div class="head">Before</div>{_metrics(before, False)}</div>\n'
+        '  <div class="ba-ar">▶</div>\n'
+        f'  <div class="col after"><div class="head">After</div>{_metrics(after, True)}</div>\n'
         '</div>\n'
     )
     if improvement:
-        body += f"\n**改善ポイント**: {improvement}\n"
+        body += f'<div class="improve"><span class="lbl">改善ポイント</span>{improvement}</div>\n'
     return body
 
 

@@ -27,7 +27,7 @@ from app.services.proposal_pipeline_prompts import (
     build_stage10_page_prompt,
 )
 from app.services.proposal_blueprint import build_story_structure
-from app.services.slide_components import render_section
+from app.services.slide_components import ensure_page_title, render_section
 from app.utils.markdown_table_fixer import fix_markdown_tables
 from app.services.proposal_data_loaders import (
     load_publication_records_for_proposal,
@@ -313,7 +313,10 @@ async def stage10_page_generation(
             )
 
         result = await _call_page_llm(messages)
-        markdown = fix_markdown_tables(result.get("response", ""))
+        markdown = ensure_page_title(
+            fix_markdown_tables(result.get("response", "")),
+            page_spec.get("title", ""),
+        )
         line_count = len([l for l in markdown.strip().split("\n") if l.strip()])
 
         if line_count > 28:
@@ -328,11 +331,13 @@ async def stage10_page_generation(
                 parts = split_text.split("---PAGE_BREAK---", 1)
                 markdown = fix_markdown_tables(parts[0].strip())
                 # Insert extra page after current
+                extra_title = page_spec.get("title", "") + "（続き）"
                 extra_page = {
                     "page_number": page_spec["page_number"] + 0.5,
-                    "title": page_spec.get("title", "") + "（続き）",
+                    "title": extra_title,
                     "purpose": page_spec.get("purpose", ""),
-                    "markdown_content": fix_markdown_tables(parts[1].strip()),
+                    "markdown_content": ensure_page_title(
+                        fix_markdown_tables(parts[1].strip()), extra_title),
                     "data_sources": page_spec.get("data_sources", []),
                     "generation_context": {"story_theme": story_theme, "page_spec": page_spec, "page_data": page_data, "split": True},
                 }
@@ -352,7 +357,7 @@ async def stage10_page_generation(
             "page_number": page_spec["page_number"],
             "title": page_spec.get("title", ""),
             "purpose": page_spec.get("purpose", ""),
-            "markdown_content": markdown,
+            "markdown_content": ensure_page_title(markdown, page_spec.get("title", "")),
             "data_sources": page_spec.get("data_sources", []),
             "generation_context": {
                 "story_theme": story_theme,

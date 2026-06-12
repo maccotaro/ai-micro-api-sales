@@ -131,15 +131,17 @@ section::after {{
 /* --- Layout components (reference brand deck) --- */
 .cards {{
   display: flex;
-  gap: 14px;
-  margin-top: 14px;
+  gap: 18px;
+  margin-top: 18px;
 }}
 .card {{
   flex: 1;
   border: 1px solid {BRAND_CYAN};
   border-radius: 8px;
-  padding: 14px 14px 12px;
+  padding: 20px 18px 16px;
   background: #ffffff;
+  min-height: 330px;
+  box-sizing: border-box;
 }}
 .card .num {{
   display: inline-block;
@@ -150,9 +152,9 @@ section::after {{
   margin-bottom: 6px;
 }}
 .card .ttl {{
-  color: {BRAND_NAVY}; font-weight: 700; font-size: 16px; margin: 4px 0;
+  color: {BRAND_NAVY}; font-weight: 700; font-size: 18px; margin: 6px 0;
 }}
-.card .body {{ font-size: 13px; color: #444; }}
+.card .body {{ font-size: 14px; color: #444; line-height: 1.6; }}
 .cmp {{
   display: flex; gap: 16px; margin-top: 12px;
 }}
@@ -201,7 +203,39 @@ ol.agenda .num {{
 .cc ul {{ margin: 0; }}
 .cc li {{ margin: 10px 0; }}
 .cc li .ct {{ color: {BRAND_NAVY}; font-weight: 700; }}
-.cc li .rs {{ display: block; font-size: 13px; color: #5a6b7a; margin-top: 2px; }}"""
+.cc li .rs {{ display: block; font-size: 13px; color: #5a6b7a; margin-top: 2px; }}
+/* --- target psychology axis rows --- */
+.axisrows {{ margin-top: 8px; }}
+.axisrow {{ display: flex; align-items: stretch; gap: 14px; margin: 14px 0; }}
+.axisrow .axname {{ flex: 0 0 210px; background: {BRAND_NAVY}; color: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; padding: 14px; text-align: center; font-size: 15px; }}
+.axisrow .axdetail {{ flex: 1.2; background: #fff; border: 1px solid #d6e6f2; border-radius: 8px; padding: 12px 16px; font-size: 14px; color: #444; }}
+.axisrow .axar {{ display: flex; align-items: center; color: {BRAND_CYAN}; font-weight: 700; font-size: 18px; }}
+.axisrow .axappeal {{ flex: 1.2; background: {BRAND_TINT}; border: 1px solid {BRAND_CYAN}; border-radius: 8px; padding: 12px 16px; font-size: 14px; color: {BRAND_NAVY}; font-weight: 600; }}
+.axisrow .cap {{ font-size: 11px; font-weight: 700; color: {BRAND_CYAN}; margin-bottom: 4px; }}
+/* --- strategy summary card extras --- */
+.card .pd {{ margin-top: 10px; font-size: 13px; }}
+.card .pd .pold {{ background: #e3e7ea; border-radius: 5px; padding: 3px 8px; color: #555; }}
+.card .pd .par {{ color: {BRAND_CYAN}; font-weight: 700; }}
+.card .pd .pnew {{ background: #fff; border: 1.5px solid {BRAND_CYAN}; border-radius: 5px; padding: 3px 8px; color: {BRAND_NAVY}; font-weight: 700; }}
+.card .chips {{ margin-top: 10px; }}
+.card .chip {{ display: inline-block; border: 1px solid {BRAND_CYAN}; border-radius: 12px; padding: 2px 10px; font-size: 12px; color: {BRAND_NAVY}; margin: 2px 3px 2px 0; }}
+.card .copyline {{ margin-top: 10px; font-size: 13px; color: {BRAND_RED}; font-weight: 600; }}
+/* --- success case: big KPIs / arrow / improvement banner --- */
+.ba {{ margin-top: 22px; }}
+.ba .col {{ padding: 24px 26px; min-height: 250px; box-sizing: border-box; }}
+.ba .col .head {{ font-size: 20px; }}
+.ba .col.after .head {{ color: {BRAND_CYAN}; }}
+.ba .metric {{ font-size: 15px; color: #444; margin-bottom: 14px; }}
+.ba .kpis {{ display: flex; gap: 44px; margin-top: 18px; justify-content: center; }}
+.ba .kpi {{ text-align: center; }}
+.ba .kv {{ font-size: 44px; font-weight: 700; color: #666; line-height: 1.1; }}
+.ba .kv.big {{ font-size: 58px; color: {BRAND_RED}; }}
+.ba .col.after .kv {{ color: {BRAND_NAVY}; }}
+.ba .col.after .kv.big {{ color: {BRAND_RED}; }}
+.ba .kl {{ font-size: 12px; color: #888; margin-top: 2px; }}
+.ba-ar {{ display: flex; align-items: center; color: {BRAND_CYAN}; font-weight: 700; font-size: 30px; }}
+.improve {{ background: {BRAND_TINT}; border-left: 6px solid {BRAND_RED}; border-radius: 0 8px 8px 0; padding: 18px 22px; margin-top: 24px; font-size: 16px; color: #37506b; }}
+.improve .lbl {{ color: {BRAND_RED}; font-weight: 700; margin-right: 10px; }}"""
 
 
 def brand_marp_frontmatter(title: str) -> str:
