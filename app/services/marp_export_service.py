@@ -52,6 +52,12 @@ def _strip_marp_separators(md: str) -> str:
     # Strip leading ---
     while lines and lines[0].strip() == "---":
         lines.pop(0)
+    # Drop any INTERNAL standalone thematic break so a single page does not get
+    # split into extra slides. Marpit treats EVERY markdown thematic break
+    # ("---", "***", "___") as a slide separator, so we remove the line outright
+    # rather than substituting another break. The LLM occasionally emits one
+    # mid-page despite the prompt telling it not to.
+    lines = [ln for ln in lines if ln.strip() not in ("---", "***", "___")]
     return "\n".join(lines)
 
 

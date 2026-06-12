@@ -114,10 +114,22 @@ def render_strategy_summary(title: str, axes: list) -> Optional[str]:
 
 
 def render_strategy_detail(title: str, axis: dict) -> Optional[str]:
-    """paradigm(旧→新) + merits(5カード) + 簡潔キャッチコピー。スロットが無い分は省略。"""
+    """狙う心理 + paradigm(旧→新) + merits(5カード) + キャッチコピー(刺さる理由付)。
+
+    上流 stage8 の各軸データ(target_psychology/paradigm/merits/catchcopies)を
+    余すところなく描画し、サンエス参照デッキ並みの密度でページを埋める。
+    """
     if not axis:
         return None
     html = _header(title)
+    # 狙うターゲット心理(リード): ページ冒頭に文脈を与え、余白を抑える。
+    psy = axis.get("target_psychology") or axis.get("rationale") or ""
+    if psy:
+        html += (
+            '<div class="lead-psy">'
+            '<span class="lbl">狙うターゲット心理</span>'
+            f'{_esc(psy)}</div>\n'
+        )
     para = axis.get("paradigm") or {}
     if para.get("old") or para.get("new"):
         html += (
@@ -133,9 +145,13 @@ def render_strategy_detail(title: str, axis: dict) -> Optional[str]:
         html += f'<div class="merits">{cards}</div>\n'
     copies = [c for c in (axis.get("catchcopies") or []) if c.get("text")][:3]
     if copies:
-        lis = "".join(f"<li>{_esc(c.get('text'))}</li>" for c in copies)
+        lis = ""
+        for c in copies:
+            reason = c.get("psychology_link") or ""
+            rs = f'<span class="rs">→ {_esc(reason)}</span>' if reason else ""
+            lis += f'<li><span class="ct">{_esc(c.get("text"))}</span>{rs}</li>'
         html += f'<div class="cc"><div class="h">キャッチコピー例</div><ul>{lis}</ul></div>\n'
-    if not (para or merits or copies):
+    if not (psy or para or merits or copies):
         html += f"{_esc(axis.get('rationale') or '')}\n"
     return html
 

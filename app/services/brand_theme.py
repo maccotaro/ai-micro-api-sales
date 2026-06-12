@@ -31,7 +31,7 @@ BRAND_MARP_CSS = f"""section {{
   background: #ffffff;
   overflow: hidden;
 }}
-section:not(.lead) {{ justify-content: flex-start !important; align-items: stretch !important; }}
+section:not(.lead) {{ align-content: start !important; align-items: stretch !important; }}
 section:not(.lead) h1 {{
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -187,16 +187,21 @@ ol.agenda .num {{
 .step .d {{ font-size: 13px; color: #555; }}
 .arrow {{ text-align: center; color: {BRAND_CYAN}; font-size: 15px; margin: -3px 0; }}
 .concl {{ text-align: center; color: {BRAND_CYAN}; font-weight: 700; border-top: 2px solid {BRAND_CYAN}; margin-top: 8px; padding-top: 6px; }}
-/* --- strategy: paradigm + merits + catchcopy --- */
-.para {{ display: flex; align-items: center; gap: 12px; background: {BRAND_TINT}; border-radius: 8px; padding: 12px; margin: 12px 0; }}
-.para .old {{ background: #e3e7ea; padding: 8px 14px; border-radius: 6px; font-weight: 700; color: #555; }}
-.para .new {{ background: #fff; border: 2px solid {BRAND_CYAN}; padding: 8px 14px; border-radius: 6px; font-weight: 700; color: {BRAND_NAVY}; }}
+/* --- strategy: lead psychology + paradigm + merits + catchcopy --- */
+.lead-psy {{ background: #fff; border-left: 6px solid {BRAND_CYAN}; padding: 12px 18px; margin: 16px 0; font-size: 16px; color: {BRAND_NAVY}; box-shadow: 0 1px 4px rgba(0,62,115,0.08); }}
+.lead-psy .lbl {{ color: {BRAND_CYAN}; font-weight: 700; margin-right: 8px; }}
+.para {{ display: flex; align-items: center; gap: 14px; background: {BRAND_TINT}; border-radius: 8px; padding: 18px; margin: 18px 0; font-size: 17px; }}
+.para .old {{ background: #e3e7ea; padding: 12px 18px; border-radius: 6px; font-weight: 700; color: #555; }}
+.para .new {{ background: #fff; border: 2px solid {BRAND_CYAN}; padding: 12px 18px; border-radius: 6px; font-weight: 700; color: {BRAND_NAVY}; }}
 .para .ar {{ color: {BRAND_CYAN}; font-weight: 700; }}
-.merits {{ display: flex; gap: 10px; margin: 12px 0; }}
-.merit {{ flex: 1; border: 1px solid {BRAND_CYAN}; border-top: 4px solid {BRAND_CYAN}; border-radius: 8px; text-align: center; padding: 12px 4px; font-weight: 700; color: {BRAND_NAVY}; font-size: 14px; }}
-.cc {{ background: {BRAND_TINT}; border-radius: 8px; padding: 12px 16px; }}
-.cc .h {{ color: {BRAND_CYAN}; font-weight: 700; margin-bottom: 6px; }}
-.cc ul {{ margin: 0; }}"""
+.merits {{ display: flex; gap: 14px; margin: 18px 0; }}
+.merit {{ flex: 1; border: 1px solid {BRAND_CYAN}; border-top: 4px solid {BRAND_CYAN}; border-radius: 8px; text-align: center; padding: 20px 6px; font-weight: 700; color: {BRAND_NAVY}; font-size: 16px; }}
+.cc {{ background: {BRAND_TINT}; border-radius: 8px; padding: 18px 22px; margin-top: 18px; }}
+.cc .h {{ color: {BRAND_CYAN}; font-weight: 700; margin-bottom: 10px; font-size: 17px; }}
+.cc ul {{ margin: 0; }}
+.cc li {{ margin: 10px 0; }}
+.cc li .ct {{ color: {BRAND_NAVY}; font-weight: 700; }}
+.cc li .rs {{ display: block; font-size: 13px; color: #5a6b7a; margin-top: 2px; }}"""
 
 
 def brand_marp_frontmatter(title: str) -> str:
