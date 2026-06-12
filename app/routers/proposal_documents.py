@@ -148,6 +148,20 @@ async def list_documents(
     }
 
 
+# NOTE: /{document_id} より前に定義しないと "brand-css" が UUID として解釈され 422 になる
+@router.get("/brand-css")
+async def get_brand_css(
+    current_user: dict = Depends(require_sales_access),
+):
+    """Preview-scoped brand CSS (single source: brand_theme.BRAND_MARP_CSS).
+
+    front-user の SlidePreview が取得し、プレビューとエクスポートの体裁を一致させる。
+    """
+    from fastapi.responses import PlainTextResponse
+    from app.services.brand_theme import preview_scoped_css
+    return PlainTextResponse(preview_scoped_css(), media_type="text/css")
+
+
 @router.get("/{document_id}")
 async def get_document(
     document_id: UUID,

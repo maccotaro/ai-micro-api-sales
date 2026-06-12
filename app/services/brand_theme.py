@@ -238,6 +238,43 @@ ol.agenda .num {{
 .improve .lbl {{ color: {BRAND_RED}; font-weight: 700; margin-right: 10px; }}"""
 
 
+def preview_scoped_css() -> str:
+    """BRAND_MARP_CSS を `.brand-slide` 配下にスコープしたプレビュー用 CSS を返す。
+
+    front-user の SlidePreview はこの CSS を取得して 1280x720 のキャンバスに
+    適用する。CSS の実体は BRAND_MARP_CSS 一本のため、エクスポート(PPTX/PDF)と
+    プレビューの体裁が乖離しない（手動ミラー brand-slide.css の置き換え）。
+    変換規則: `section...` → `.brand-slide...`、その他セレクタは `.brand-slide ` を前置。
+    """
+    rules = []
+    for raw in BRAND_MARP_CSS.split("}"):
+        if "{" not in raw:
+            continue
+        sel_part, body = raw.split("{", 1)
+        # コメントはセレクタ部から除去（rule 単位の先頭にのみ現れる想定）
+        while "/*" in sel_part and "*/" in sel_part:
+            pre, rest = sel_part.split("/*", 1)
+            sel_part = pre + rest.split("*/", 1)[1]
+        selectors = []
+        for s in sel_part.split(","):
+            s = s.strip()
+            if not s:
+                continue
+            if s.startswith("section"):
+                selectors.append(".brand-slide" + s[len("section"):])
+            else:
+                selectors.append(".brand-slide " + s)
+        if selectors:
+            rules.append(", ".join(selectors) + " {" + body + "}")
+    # プレビュー専用の補完: Marp 側が暗黙に与えるレイアウト前提を再現する
+    rules.append(".brand-slide, .brand-slide * { box-sizing: border-box; }")
+    rules.append(".brand-slide { display: block; }")
+    rules.append(
+        ".brand-slide.lead { display: flex; flex-direction: column; justify-content: center; }"
+    )
+    return "\n".join(rules)
+
+
 def brand_marp_frontmatter(title: str) -> str:
     """Build a Marp frontmatter block with the brand theme embedded.
 
