@@ -303,11 +303,84 @@ def render_plan(title: str, stage2: dict) -> Optional[str]:
     return html
 
 
+def render_keyword(title: str, axes: list, target_insights: dict) -> Optional[str]:
+    """戦略軸ごとの検索キーワード設計（チップ＋掛け合わせコピー例）。stage8 軸が必須。"""
+    if not axes:
+        return None
+    html = _header(title)
+    ti = target_insights or {}
+    if ti.get("primary_target"):
+        html += (
+            '<div class="lead-psy"><span class="lbl">主要ターゲット</span>'
+            f'{_esc(ti["primary_target"])}</div>\n'
+        )
+    cols = ""
+    for a in axes[:3]:
+        chips = "".join(
+            f'<span class="kwchip">{_esc(m)}</span>'
+            for m in (a.get("merits") or [])[:5] if m
+        )
+        copies = [c.get("text") for c in (a.get("catchcopies") or []) if c.get("text")][:2]
+        copyhtml = "".join(f'<div class="kwcopy">「{_esc(t)}」</div>' for t in copies)
+        cols += (
+            f'<div class="kwcol"><div class="kwhead">{_esc(a.get("title"))}</div>'
+            '<div class="kwlbl">検索キーワード例</div>'
+            f'<div class="kwchips">{chips or "—"}</div>'
+            '<div class="kwlbl">掛け合わせ・コピー例</div>'
+            f'{copyhtml}</div>'
+        )
+    html += f'<div class="kwcols">{cols}</div>\n'
+    html += '<div class="concl">検索意図に合致するキーワード設計＋掛け合わせワードでユニーク化</div>\n'
+    return html
+
+
+def render_next_steps(title: str, stage1: dict, stage2: dict, stage3: dict) -> Optional[str]:
+    """2カラム: ご提案内容のまとめ(課題+推奨プラン) / 次回までのアクション(優先度付)。"""
+    issues = (stage1 or {}).get("issues") or []
+    actions = (stage3 or {}).get("action_plan") or []
+    if not issues and not actions:
+        return None
+    sum_items = "".join(
+        f'<li><span class="nstag">{_esc(i.get("category") or "課題")}</span>'
+        f'{_esc(i.get("title"))}</li>'
+        for i in issues[:5]
+    )
+    p = ((stage2 or {}).get("proposals") or [{}])[0]
+    sb = p.get("shochikubai") or {}
+    rec = p.get("recommended")
+    rg = sb.get(rec) or {}
+    price = rg.get("total_price")
+    if isinstance(price, (int, float)):
+        recname = {"matsu": "松", "take": "竹", "ume": "梅"}.get(rec, "")
+        sum_items += (
+            f'<li><span class="nstag tagp">推奨</span>{recname}プラン ¥{price:,.0f}</li>'
+        )
+    sum_items = sum_items or "<li>—</li>"
+    pri_map = {"high": ("最優先", "pri-high"), "medium": ("中", "pri-mid"), "low": ("低", "pri-low")}
+    act_items = ""
+    for idx, a in enumerate(actions[:6], start=1):
+        lbl, cls = pri_map.get(a.get("priority"), ("", ""))
+        badge = f'<span class="nspri {cls}">{lbl}</span>' if lbl else ""
+        act_items += (
+            f'<li><span class="nsnum">{idx}</span>'
+            f'<span class="nstxt">{_esc(a.get("title"))}{badge}</span></li>'
+        )
+    act_items = act_items or "<li>—</li>"
+    return _header(title) + (
+        '<div class="nscols">'
+        '<div class="nscol"><div class="nshead">ご提案内容のまとめ</div>'
+        f'<ul class="nslist">{sum_items}</ul></div>'
+        '<div class="nscol"><div class="nshead na">次回までのアクション</div>'
+        f'<ol class="nsacts">{act_items}</ol></div>'
+        '</div>\n'
+    )
+
+
 # Sections rendered deterministically; everything else falls back to the LLM.
 _DETERMINISTIC = {
     "cover", "agenda", "principles", "misconception", "segment_comparison",
     "target_psychology", "strategy_summary", "strategy_detail", "success_case",
-    "plan",
+    "plan", "keyword", "next_steps",
 }
 
 
@@ -326,7 +399,9 @@ def render_section(page_spec: dict, stages: dict) -> Optional[str]:
     ti = s7.get("target_insights") or {}
     axes = s8.get("strategy_axes") or []
     cases = s8.get("success_case_references") or []
+    s1 = stages.get("stage1") or {}
     s2 = stages.get("stage2") or {}
+    s3 = stages.get("stage3") or {}
 
     try:
         if section == "cover":
@@ -337,6 +412,10 @@ def render_section(page_spec: dict, stages: dict) -> Optional[str]:
             return render_principles(title)
         if section == "plan":
             return render_plan(title, s2)
+        if section == "keyword":
+            return render_keyword(title, axes, ti)
+        if section == "next_steps":
+            return render_next_steps(title, s1, s2, s3)
         if section == "misconception":
             return render_misconception(title, ind)
         if section == "segment_comparison":

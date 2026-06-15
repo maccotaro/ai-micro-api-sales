@@ -447,7 +447,7 @@ class ProposalPipelineService:
                         outputs.get(7, {}), outputs.get(8, {}), outputs[9],
                         config, self.llm_client, db,
                         tenant_id, user_id, run_id_str, minute_id,
-                        persona_id=persona_id,
+                        persona_id=persona_id, stage3_output=outputs.get(3, {}),
                     )
 
                 outputs[sn] = out

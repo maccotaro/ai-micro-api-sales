@@ -248,7 +248,32 @@ ol.agenda .num {{
 .plan .pitems {{ border-top: 1px solid #d6e6f2; padding-top: 10px; }}
 .plan .pitem {{ display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: #444; margin: 7px 0; }}
 .plan .pitem .pp {{ color: #889ab0; font-size: 12px; white-space: nowrap; }}
-.plan .peffect {{ margin-top: 12px; font-size: 12px; color: #37506b; background: #fff; border-left: 3px solid {BRAND_CYAN}; padding: 8px 10px; }}"""
+.plan .peffect {{ margin-top: 12px; font-size: 12px; color: #37506b; background: #fff; border-left: 3px solid {BRAND_CYAN}; padding: 8px 10px; }}
+/* --- keyword strategy columns --- */
+.kwcols {{ display: flex; gap: 18px; margin-top: 20px; align-items: stretch; }}
+.kwcol {{ flex: 1; border: 1px solid #d6e6f2; border-radius: 10px; padding: 0 0 16px; background: #fff; min-height: 300px; box-sizing: border-box; overflow: hidden; }}
+.kwcol .kwhead {{ background: {BRAND_NAVY}; color: #fff; font-weight: 700; padding: 12px 14px; font-size: 15px; }}
+.kwcol .kwlbl {{ font-size: 11px; font-weight: 700; color: {BRAND_CYAN}; margin: 14px 14px 6px; }}
+.kwchips {{ padding: 0 14px; }}
+.kwchip {{ display: inline-block; background: {BRAND_TINT}; border: 1px solid {BRAND_CYAN}; border-radius: 12px; padding: 3px 11px; font-size: 12px; color: {BRAND_NAVY}; margin: 0 4px 6px 0; }}
+.kwcopy {{ margin: 6px 14px 0; font-size: 13px; color: {BRAND_RED}; font-weight: 600; }}
+/* --- next steps two columns --- */
+.nscols {{ display: flex; gap: 20px; margin-top: 20px; align-items: stretch; }}
+.nscol {{ flex: 1; border: 1px solid #d6e6f2; border-radius: 10px; overflow: hidden; background: #fff; }}
+.nscol .nshead {{ background: {BRAND_NAVY}; color: #fff; font-weight: 700; padding: 12px 16px; font-size: 16px; }}
+.nscol .nshead.na {{ background: {BRAND_CYAN}; }}
+.nslist {{ list-style: none; margin: 0; padding: 14px 16px; }}
+.nslist li {{ display: flex; align-items: flex-start; gap: 8px; font-size: 14px; color: #333; margin: 10px 0; line-height: 1.5; }}
+.nstag {{ flex: 0 0 auto; background: #eef0f2; color: {BRAND_NAVY}; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 2px 8px; margin-top: 1px; }}
+.nstag.tagp {{ background: {BRAND_RED}; color: #fff; }}
+.nsacts {{ list-style: none; margin: 0; padding: 14px 16px; counter-reset: ns; }}
+.nsacts li {{ display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: #333; margin: 12px 0; line-height: 1.5; }}
+.nsnum {{ flex: 0 0 26px; width: 26px; height: 26px; line-height: 26px; text-align: center; border-radius: 50%; background: {BRAND_CYAN}; color: #fff; font-weight: 700; font-size: 13px; }}
+.nstxt {{ flex: 1; }}
+.nspri {{ display: inline-block; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 1px 8px; margin-left: 8px; }}
+.nspri.pri-high {{ background: {BRAND_RED}; color: #fff; }}
+.nspri.pri-mid {{ background: {BRAND_TINT}; color: {BRAND_NAVY}; border: 1px solid {BRAND_CYAN}; }}
+.nspri.pri-low {{ background: #eef0f2; color: #777; }}"""
 
 
 def preview_scoped_css() -> str:

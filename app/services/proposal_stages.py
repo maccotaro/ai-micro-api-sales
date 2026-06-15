@@ -247,6 +247,7 @@ async def stage10_page_generation(
     pipeline_run_id: Optional[str] = None,
     minute_id: Optional[UUID] = None,
     persona_id: Optional[str] = None,
+    stage3_output: Optional[dict] = None,
 ) -> dict:
     """Generate Marp-compatible Markdown for each page."""
     stage_cfg = config.get_stage(10)
@@ -261,10 +262,9 @@ async def stage10_page_generation(
 
     # Structured stage data for deterministic component rendering.
     component_stages = {
-        "story_theme": story_theme,
-        "stage2": stage2_output,
-        "stage7": stage7_output,
-        "stage8": stage8_output,
+        "story_theme": story_theme, "stage1": stage1_output,
+        "stage2": stage2_output, "stage3": stage3_output or {},
+        "stage7": stage7_output, "stage8": stage8_output,
     }
 
     # Generate each page individually

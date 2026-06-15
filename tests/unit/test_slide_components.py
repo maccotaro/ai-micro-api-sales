@@ -47,7 +47,7 @@ class TestRenderSection:
             assert out and spec["title"] in out
 
     def test_non_deterministic_falls_back(self):
-        for section in ["plan", "keyword", "target_trend", "next_steps", "unknown"]:
+        for section in ["target_trend", "unknown"]:
             assert render_section({"section": section, "title": "X"}, _stages()) is None
 
     def test_misconception_content(self):
