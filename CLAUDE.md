@@ -75,24 +75,24 @@ ai-micro-api-sales/
 │   │   ├── meeting.py      # MeetingMinute, ProposalHistory
 │   │   └── master.py       # Product, Campaign等（読み取り専用）
 │   ├── schemas/
-│   │   ├── meeting.py      # 議事録・提案スキーマ
-│   │   └── simulation.py   # シミュレーションスキーマ
+│   │   └── meeting.py      # 議事録・提案スキーマ
 │   ├── services/
 │   │   ├── analysis_service.py   # 議事録解析
 │   │   ├── proposal_service.py   # 提案生成
-│   │   ├── simulation_service.py # シミュレーション
-│   │   ├── embedding_service.py  # ベクトル検索
-│   │   └── graph/
+│   │   ├── embedding_service.py  # ベクトル検索（提案パイプライン内部検索で使用）
+│   │   └── graph/                # 提案パイプライン内部でグラフ推薦に使用
 │   │       ├── neo4j_client.py   # Neo4j接続クライアント
 │   │       └── sales_graph_service.py # グラフ操作サービス
 │   ├── routers/
 │   │   ├── meeting_minutes.py
 │   │   ├── proposals.py
-│   │   ├── simulation.py
-│   │   ├── search.py             # ベクトル検索
-│   │   ├── graph.py              # グラフ推薦
 │   │   └── health.py
 │   └── main.py
+
+# 注: 公開 /simulation・/search・/graph エンドポイント(front-user のベータ機能)は 2026-07-21 に撤去。
+#     simulation_service/search.py/simulation.py/schemas.simulation は削除。
+#     embedding_service(ベクトル検索)・graph サービス・simulation_params テーブルは
+#     提案パイプライン(pipeline_stages/load_simulation_data 等)の内部処理で引き続き使用。
 ├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml
