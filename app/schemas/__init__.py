@@ -9,10 +9,6 @@ from app.schemas.meeting import (
     ProposalResponse,
     ProposalFeedback,
 )
-from app.schemas.simulation import (
-    SimulationRequest,
-    SimulationResult,
-)
 from app.schemas.chat import (
     ChatMessageCreate,
     ChatMessageResponse,
@@ -32,8 +28,6 @@ __all__ = [
     "ProposalCreate",
     "ProposalResponse",
     "ProposalFeedback",
-    "SimulationRequest",
-    "SimulationResult",
     "ChatMessageCreate",
     "ChatMessageResponse",
     "ChatConversationCreate",
