@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>提案書テンプレート設定 — デザインモック</title>
+<style>
+  :root{
+    /* trinity of tonmana (editable via controls) */
+    --cyan:#00A0E9; --navy:#003E73; --red:#E60012; --tint:#EAF6FC;
+    --slide-font:'Hiragino Kaku Gothic ProN','Noto Sans JP','YuGothic',sans-serif;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Noto Sans JP','Hiragino Kaku Gothic ProN',sans-serif;background:#f1f4f8;color:#1f2937;}
+  header.app{background:#0f1f33;color:#fff;padding:14px 24px;display:flex;align-items:center;gap:18px;}
+  header.app h1{font-size:17px;margin:0;font-weight:700;}
+  header.app .sub{font-size:12px;color:#9fb3c8;}
+  .presets{margin-left:auto;display:flex;gap:8px;align-items:center;}
+  .presets span{font-size:12px;color:#9fb3c8;}
+  .preset{background:#1c3css;border:1px solid #2c4straps;}
+  .preset{background:#16263b;border:1px solid #2e4straps;color:#cfe0f0;border-radius:16px;padding:5px 14px;font-size:12px;cursor:pointer;border:1px solid #2e4a66;}
+  .preset.active{background:var(--cyan);border-color:var(--cyan);color:#fff;font-weight:700;}
+  .layout{display:flex;height:calc(100vh - 52px);}
+  /* ---- control panel ---- */
+  .panel{width:380px;min-width:380px;background:#fff;border-right:1px solid #dde4ec;overflow-y:auto;padding:0 0 40px;}
+  .group{border-bottom:1px solid #eef1f5;}
+  .group > .gh{display:flex;align-items:center;gap:10px;padding:16px 20px;cursor:pointer;font-weight:700;font-size:14px;color:var(--navy);}
+  .group > .gh .nbadge{width:22px;height:22px;border-radius:50%;background:var(--cyan);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;}
+  .group .body{padding:4px 20px 20px;}
+  .field{margin:14px 0;}
+  .field label{display:block;font-size:12px;color:#5b6b7c;margin-bottom:6px;font-weight:600;}
+  .colorrow{display:flex;gap:10px;}
+  .coloritem{flex:1;text-align:center;}
+  .coloritem input[type=color]{width:100%;height:34px;border:1px solid #d4dde6;border-radius:6px;background:#fff;cursor:pointer;padding:2px;}
+  .coloritem .cap{font-size:10px;color:#7c8a99;margin-top:3px;}
+  select,input[type=text]{width:100%;padding:8px 10px;border:1px solid #d4dde6;border-radius:6px;font-size:13px;background:#fff;}
+  .seg{display:flex;border:1px solid #d4dde6;border-radius:6px;overflow:hidden;}
+  .seg button{flex:1;border:0;background:#fff;padding:8px 4px;font-size:12px;cursor:pointer;color:#5b6b7c;}
+  .seg button.active{background:var(--cyan);color:#fff;font-weight:700;}
+  .switchrow{display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:5px 0;}
+  /* structure list */
+  .seclist{list-style:none;margin:0;padding:0;}
+  .seclist li{display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #e4eaf0;border-radius:8px;margin:7px 0;background:#fff;font-size:13px;}
+  .seclist li.off{opacity:.45;}
+  .seclist li .grip{color:#b6c2cf;cursor:grab;}
+  .seclist li .nm{flex:1;}
+  .seclist li .tag{font-size:10px;background:#eef1f5;color:#7c8a99;border-radius:4px;padding:1px 6px;}
+  .seclist li .mv{border:0;background:#eef3f8;border-radius:5px;width:22px;height:22px;cursor:pointer;color:#5b6b7c;}
+  .seclist li input[type=checkbox]{width:16px;height:16px;}
+  /* ---- preview ---- */
+  .preview{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  .pv-toolbar{padding:12px 20px;background:#fff;border-bottom:1px solid #dde4ec;display:flex;gap:8px;align-items:center;}
+  .pv-toolbar .t{font-size:13px;color:#5b6b7c;font-weight:600;margin-right:8px;}
+  .pv-toolbar button{border:1px solid #d4dde6;background:#fff;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;color:#42536b;}
+  .pv-toolbar button.active{background:var(--navy);color:#fff;border-color:var(--navy);font-weight:700;}
+  .pv-stage{flex:1;overflow:auto;padding:32px;display:flex;justify-content:center;align-items:flex-start;}
+  /* slide canvas 16:9 */
+  .slide{width:960px;height:540px;background:#fff;box-shadow:0 8px 30px rgba(15,40,70,.18);border-radius:6px;position:relative;overflow:hidden;font-family:var(--slide-font);color:#222;flex:0 0 auto;}
+  .slide .logo{position:absolute;top:10px;right:18px;font-size:11px;font-weight:700;color:#fff;opacity:.9;z-index:5;}
+  .slide .foot{position:absolute;bottom:10px;left:24px;font-size:10px;color:#9bb3c7;}
+  .slide .pageno{position:absolute;bottom:10px;right:18px;font-size:10px;color:var(--navy);}
+  /* header variants */
+  .slide .h1bar{font-size:22px;font-weight:700;color:#fff;background:var(--cyan);padding:14px 28px;}
+  .hs-underline .h1bar{background:transparent;color:var(--navy);border-bottom:3px solid var(--cyan);margin:14px 28px 0;padding:6px 0;}
+  .hs-side .h1bar{background:transparent;color:var(--navy);border-left:10px solid var(--cyan);margin:18px 0 0;padding:4px 24px;}
+  .slide.bg-tint{background:var(--tint);}
+  .body-pad{padding:24px 28px;}
+  /* cover */
+  .cover{display:flex;flex-direction:column;justify-content:center;height:100%;padding:0 56px;}
+  .cover h1{font-size:38px;color:var(--navy);border-left:10px solid var(--cyan);padding-left:22px;margin:0 0 10px;}
+  .cover h2{font-size:20px;color:var(--cyan);padding-left:22px;margin:0;font-weight:600;}
+  /* 3 strategy cards */
+  .cards{display:flex;gap:16px;}
+  .card{flex:1;border:1px solid var(--cyan);border-radius:var(--radius);padding:16px;background:#fff;min-height:300px;}
+  .card .num{width:30px;height:30px;line-height:30px;border-radius:50%;background:var(--cyan);color:#fff;text-align:center;font-weight:700;}
+  .card .ttl{color:var(--navy);font-weight:700;font-size:17px;margin:8px 0;}
+  .card .body{font-size:12px;color:#444;line-height:1.6;}
+  .chip{display:inline-block;border:1px solid var(--cyan);border-radius:12px;padding:2px 9px;font-size:11px;color:var(--navy);margin:8px 4px 0 0;}
+  .copyline{margin-top:10px;font-size:12px;color:var(--red);font-weight:600;}
+  .concl{text-align:center;color:var(--cyan);font-weight:700;border-top:2px solid var(--cyan);margin-top:14px;padding-top:8px;}
+  /* plan cards */
+  .plans{display:flex;gap:18px;}
+  .plan{flex:1;position:relative;border:1px solid #d6e6f2;border-radius:var(--radius);padding:18px 16px;background:#fff;min-height:300px;}
+  .plan.rec{border:2px solid var(--cyan);background:var(--tint);}
+  .plan .badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:3px 14px;border-radius:12px;}
+  .plan .grade{width:44px;height:44px;line-height:44px;border-radius:50%;background:var(--navy);color:#fff;text-align:center;font-weight:700;font-size:20px;margin:0 auto 10px;}
+  .plan.rec .grade{background:var(--cyan);}
+  .plan .price{text-align:center;font-size:24px;font-weight:700;color:var(--navy);margin-bottom:12px;}
+  .plan.rec .price{color:var(--red);}
+  .plan .pitem{display:flex;justify-content:space-between;font-size:12px;color:#444;margin:7px 0;border-top:1px solid #eef2f6;padding-top:7px;}
+  .hint{font-size:11px;color:#9aa7b5;margin-top:6px;}
+  /* ===== additional slide component samples (ported from brand_theme) ===== */
+  .slide h2{color:var(--navy);font-size:16px;border-bottom:2px solid var(--cyan);padding-bottom:4px;margin:6px 0 10px;}
+  ol.agenda{list-style:none;padding:0;margin:8px 0 0;}
+  ol.agenda li{display:flex;align-items:center;gap:12px;margin:13px 0;font-size:17px;color:var(--navy);font-weight:600;}
+  ol.agenda .num{width:34px;height:34px;line-height:34px;border-radius:50%;background:var(--cyan);color:#fff;text-align:center;font-weight:700;font-size:14px;}
+  .cols{display:flex;gap:24px;margin-top:6px;}
+  .cols .col{flex:1;}
+  .colhead{background:var(--navy);color:#fff;font-weight:700;padding:8px 12px;border-radius:6px;text-align:center;font-size:14px;}
+  .step{border:1px solid #cfe6f4;border-radius:8px;padding:9px 12px;margin:9px 0;}
+  .step .tt{color:var(--navy);font-weight:700;font-size:13px;}
+  .step .dd{font-size:12px;color:#555;}
+  .arrow{text-align:center;color:var(--cyan);font-size:15px;margin:-3px 0;}
+  .cmp{display:flex;gap:18px;margin-top:14px;}
+  .cmp .col{flex:1;border-radius:8px;padding:16px 18px;}
+  .cmp .col.left{background:#eef0f2;}
+  .cmp .col.right{background:var(--tint);}
+  .cmp .col .head{font-weight:700;margin-bottom:8px;color:var(--navy);}
+  .cmp .col.right .head{color:var(--cyan);}
+  .cmp ul{margin:0;padding-left:18px;font-size:13px;line-height:1.8;}
+  table.cmpt{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px;}
+  table.cmpt th{background:var(--navy);color:#fff;padding:8px 10px;text-align:left;}
+  table.cmpt td{padding:7px 10px;border-bottom:1px solid #d6e6f2;}
+  table.cmpt tr:nth-child(even) td{background:var(--tint);}
+  .axisrow{display:flex;align-items:stretch;gap:14px;margin:14px 0;}
+  .axisrow .axname{flex:0 0 200px;background:var(--navy);color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;padding:12px;text-align:center;font-size:14px;}
+  .axisrow .axdetail{flex:1.2;background:#fff;border:1px solid #d6e6f2;border-radius:8px;padding:11px 14px;font-size:13px;color:#444;}
+  .axisrow .axar{display:flex;align-items:center;color:var(--cyan);font-weight:700;font-size:18px;}
+  .axisrow .axappeal{flex:1.2;background:var(--tint);border:1px solid var(--cyan);border-radius:8px;padding:11px 14px;font-size:13px;color:var(--navy);font-weight:600;}
+  .cap{font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:4px;}
+  .lead-psy{background:#fff;border-left:6px solid var(--cyan);padding:12px 18px;margin:14px 0;font-size:15px;color:var(--navy);box-shadow:0 1px 4px rgba(0,62,115,.08);}
+  .lead-psy .lbl{color:var(--cyan);font-weight:700;margin-right:8px;}
+  .para{display:flex;align-items:center;gap:14px;background:var(--tint);border-radius:8px;padding:16px;margin:16px 0;font-size:16px;}
+  .para .old{background:#e3e7ea;padding:10px 16px;border-radius:6px;font-weight:700;color:#555;}
+  .para .new{background:#fff;border:2px solid var(--cyan);padding:10px 16px;border-radius:6px;font-weight:700;color:var(--navy);}
+  .para .ar{color:var(--cyan);font-weight:700;}
+  .merits{display:flex;gap:14px;margin:16px 0;}
+  .merit{flex:1;border:1px solid var(--cyan);border-top:4px solid var(--cyan);border-radius:8px;text-align:center;padding:18px 6px;font-weight:700;color:var(--navy);font-size:15px;}
+  .cc{background:var(--tint);border-radius:8px;padding:16px 20px;}
+  .cc .h{color:var(--cyan);font-weight:700;margin-bottom:8px;}
+  .cc ul{margin:0;padding-left:18px;}
+  .cc li{margin:8px 0;}.cc li .ct{color:var(--navy);font-weight:700;}.cc li .rs{display:block;font-size:12px;color:#5a6b7a;}
+  .ba{display:flex;gap:16px;align-items:stretch;margin-top:18px;}
+  .ba .col{flex:1;border:1px solid #d6e6f2;border-radius:8px;padding:22px 24px;}
+  .ba .col.after{border:2px solid var(--cyan);background:var(--tint);}
+  .ba .col .head{font-weight:700;color:var(--navy);font-size:18px;margin-bottom:6px;}
+  .ba .col.after .head{color:var(--cyan);}
+  .ba .metric{font-size:13px;color:#444;margin-bottom:10px;}
+  .ba .kpis{display:flex;gap:36px;justify-content:center;margin-top:14px;}
+  .ba .kpi{text-align:center;}
+  .ba .kv{font-size:40px;font-weight:700;color:#666;line-height:1.1;}
+  .ba .kv.big{font-size:50px;color:var(--red);}
+  .ba .col.after .kv{color:var(--navy);}.ba .col.after .kv.big{color:var(--red);}
+  .ba .kl{font-size:12px;color:#888;}
+  .ba-ar{display:flex;align-items:center;color:var(--cyan);font-weight:700;font-size:28px;}
+  .improve{background:var(--tint);border-left:6px solid var(--red);border-radius:0 8px 8px 0;padding:16px 20px;margin-top:20px;font-size:15px;color:#37506b;}
+  .improve .lbl{color:var(--red);font-weight:700;margin-right:10px;}
+  .kwcols{display:flex;gap:18px;margin-top:16px;}
+  .kwcol{flex:1;border:1px solid #d6e6f2;border-radius:var(--radius);padding:0 0 16px;background:#fff;overflow:hidden;}
+  .kwcol .kwhead{background:var(--navy);color:#fff;font-weight:700;padding:12px 14px;font-size:14px;}
+  .kwcol .kwlbl{font-size:10px;font-weight:700;color:var(--cyan);margin:14px 14px 6px;}
+  .kwchips{padding:0 14px;}
+  .kwchip{display:inline-block;background:var(--tint);border:1px solid var(--cyan);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--navy);margin:0 4px 6px 0;}
+  .kwcopy{margin:6px 14px 0;font-size:12px;color:var(--red);font-weight:600;}
+  .nscols{display:flex;gap:18px;margin-top:16px;}
+  .nscol{flex:1;border:1px solid #d6e6f2;border-radius:var(--radius);overflow:hidden;background:#fff;}
+  .nscol .nshead{background:var(--navy);color:#fff;font-weight:700;padding:11px 16px;font-size:15px;}
+  .nscol .nshead.na{background:var(--cyan);}
+  .nslist{list-style:none;margin:0;padding:14px 16px;}
+  .nslist li{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:#333;margin:10px 0;}
+  .nstag{background:#eef0f2;color:var(--navy);font-size:10px;font-weight:700;border-radius:4px;padding:2px 8px;}
+  .nstag.tagp{background:var(--red);color:#fff;}
+  .nsacts{list-style:none;margin:0;padding:14px 16px;}
+  .nsacts li{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#333;margin:12px 0;}
+  .nsnum{flex:0 0 26px;width:26px;height:26px;line-height:26px;text-align:center;border-radius:50%;background:var(--cyan);color:#fff;font-weight:700;font-size:13px;}
+  .nspri{font-size:10px;font-weight:700;border-radius:4px;padding:1px 8px;margin-left:8px;}
+  .nspri.h{background:var(--red);color:#fff;}.nspri.m{background:var(--tint);color:var(--navy);border:1px solid var(--cyan);}.nspri.l{background:#eef0f2;color:#777;}
+</style>
+</head>
+<body>
+<header class="app">
+  <h1>提案書テンプレート設定</h1>
+  <span class="sub">トンマナ・マスタースライド・構成を一画面で。右はライブプレビュー（モック）</span>
+  <div class="presets">
+    <span>プリセット:</span>
+    <button class="preset active" data-preset="simple">シンプル</button>
+    <button class="preset" data-preset="impact">インパクト</button>
+    <button class="preset" data-preset="corp">コーポレート</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- ============ CONTROL PANEL ============ -->
+  <div class="panel">
+
+    <!-- (1) トンマナ -->
+    <div class="group">
+      <div class="gh"><span class="nbadge">1</span>トンマナ（色・フォント）</div>
+      <div class="body">
+        <div class="field">
+          <label>ブランドカラー</label>
+          <div class="colorrow">
+            <div class="coloritem"><input type="color" id="c-cyan" value="#00A0E9"><div class="cap">メイン</div></div>
+            <div class="coloritem"><input type="color" id="c-navy" value="#003E73"><div class="cap">濃色</div></div>
+            <div class="coloritem"><input type="color" id="c-red" value="#E60012"><div class="cap">強調</div></div>
+            <div class="coloritem"><input type="color" id="c-tint" value="#EAF6FC"><div class="cap">淡背景</div></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>フォント</label>
+          <select id="f-font">
+            <option value="'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif">ヒラギノ角ゴ / Noto Sans JP（標準）</option>
+            <option value="'Noto Serif JP',serif">Noto Serif JP（明朝・信頼感）</option>
+            <option value="'M PLUS Rounded 1c',sans-serif">M PLUS Rounded（やわらかい）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>ロゴ</label>
+          <input type="text" id="f-logo" value="MyNavi" placeholder="ロゴ画像URL または テキスト">
+          <div class="hint">※実装ではPNG/SVGアップロード対応</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- (2) マスタースライド -->
+    <div class="group">
+      <div class="gh"><span class="nbadge">2</span>マスタースライド</div>
+      <div class="body">
+        <div class="field">
+          <label>見出しスタイル</label>
+          <div class="seg" id="seg-header">
+            <button data-v="bar" class="active">シアン帯</button>
+            <button data-v="underline">下線</button>
+            <button data-v="side">サイド罫</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>背景</label>
+          <div class="seg" id="seg-bg">
+            <button data-v="white" class="active">白</button>
+            <button data-v="tint">淡色</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>角丸</label>
+          <div class="seg" id="seg-radius">
+            <button data-v="4" >シャープ</button>
+            <button data-v="10" class="active">標準</button>
+            <button data-v="18">丸め</button>
+          </div>
+        </div>
+        <div class="switchrow"><span>ロゴを表示</span><input type="checkbox" id="sw-logo" checked></div>
+        <div class="switchrow"><span>フッター（資料名）</span><input type="checkbox" id="sw-foot" checked></div>
+        <div class="switchrow"><span>ページ番号</span><input type="checkbox" id="sw-page" checked></div>
+      </div>
+    </div>
+
+    <!-- (3) スライド構成 -->
+    <div class="group">
+      <div class="gh"><span class="nbadge">3</span>スライド構成（並べ替え・ON/OFF）</div>
+      <div class="body">
+        <ul class="seclist" id="seclist"></ul>
+        <div class="hint">ドラッグまたは ↑↓ で並べ替え。チェックを外すと生成対象から除外。</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ PREVIEW ============ -->
+  <div class="preview">
+    <div class="pv-toolbar">
+      <span class="t">プレビュー:</span>
+      <button class="active" data-slide="cover">表紙</button>
+      <button data-slide="agenda">本日の流れ</button>
+      <button data-slide="principles">原稿設計の重要性</button>
+      <button data-slide="misconception">イメージと実態</button>
+      <button data-slide="segment">類似職種の違い</button>
+      <button data-slide="psychology">ターゲット心理</button>
+      <button data-slide="strategy">戦略3カード</button>
+      <button data-slide="detail">戦略の詳細</button>
+      <button data-slide="plan">料金プラン</button>
+      <button data-slide="keyword">キーワード設計</button>
+      <button data-slide="success">成功事例</button>
+      <button data-slide="next">次のステップ</button>
+    </div>
+    <div class="pv-stage">
+      <div class="slide" id="slide"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SECTIONS = [
+  {id:'cover',nm:'表紙',tag:'固定',on:true},
+  {id:'agenda',nm:'本日の流れ',tag:'固定',on:true},
+  {id:'principles',nm:'原稿設計の重要性',tag:'固定',on:true},
+  {id:'misconception',nm:'イメージと実態',tag:'条件',on:true},
+  {id:'segment',nm:'類似職種との違い',tag:'条件',on:true},
+  {id:'psychology',nm:'ターゲット心理',tag:'条件',on:true},
+  {id:'strategy_sum',nm:'戦略3カード',tag:'固定',on:true},
+  {id:'strategy_det',nm:'各戦略の詳細',tag:'可変×N',on:true},
+  {id:'plan',nm:'ご提案プラン（料金）',tag:'固定',on:true},
+  {id:'keyword',nm:'キーワード設計',tag:'条件',on:true},
+  {id:'success',nm:'成功事例',tag:'条件',on:true},
+  {id:'next',nm:'次のステップ',tag:'固定',on:true},
+];
+const PRESETS = {
+  simple:{cyan:'#00A0E9',navy:'#003E73',red:'#E60012',tint:'#EAF6FC',header:'bar',bg:'white',radius:'10'},
+  impact:{cyan:'#0B7DD6',navy:'#0A2540',red:'#FF3B30',tint:'#E8F1FB',header:'side',bg:'tint',radius:'18'},
+  corp:{cyan:'#1F8A70',navy:'#13343B',red:'#C0392B',tint:'#EAF3F0',header:'underline',bg:'white',radius:'4'},
+};
+const S = {header:'bar',bg:'white',radius:'10',logo:true,foot:true,page:true,slide:'cover',logoText:'MyNavi'};
+
+function setVar(k,v){document.documentElement.style.setProperty(k,v);}
+function applyFont(){document.documentElement.style.setProperty('--slide-font',document.getElementById('f-font').value);}
+
+function renderSecList(){
+  const ul=document.getElementById('seclist');ul.innerHTML='';
+  SECTIONS.forEach((s,i)=>{
+    const li=document.createElement('li');li.className=s.on?'':'off';
+    li.innerHTML=`<span class="grip">⋮⋮</span>
+      <input type="checkbox" ${s.on?'checked':''} data-i="${i}">
+      <span class="nm">${s.nm}</span><span class="tag">${s.tag}</span>
+      <button class="mv" data-up="${i}">↑</button><button class="mv" data-dn="${i}">↓</button>`;
+    ul.appendChild(li);
+  });
+  ul.querySelectorAll('input[type=checkbox]').forEach(c=>c.onchange=e=>{SECTIONS[e.target.dataset.i].on=e.target.checked;renderSecList();});
+  ul.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{const i=+b.dataset.up;if(i>0){[SECTIONS[i-1],SECTIONS[i]]=[SECTIONS[i],SECTIONS[i-1]];renderSecList();}});
+  ul.querySelectorAll('[data-dn]').forEach(b=>b.onclick=()=>{const i=+b.dataset.dn;if(i<SECTIONS.length-1){[SECTIONS[i+1],SECTIONS[i]]=[SECTIONS[i],SECTIONS[i+1]];renderSecList();}});
+}
+
+function chrome(inner,title){
+  const hs='hs-'+S.header;
+  const bg=S.bg==='tint'?'bg-tint':'';
+  const logo=S.logo?`<div class="logo">${S.logoText}</div>`:'';
+  const foot=S.foot?`<div class="foot">IDOM 採用成功に向けたご提案</div>`:'';
+  const page=S.page?`<div class="pageno">7</div>`:'';
+  return `<div class="h1bar">${title}</div><div class="body-pad">${inner}</div>${logo}${foot}${page}`;
+}
+function renderSlide(){
+  const el=document.getElementById('slide');
+  el.className='slide hs-'+S.header+(S.bg==='tint'?' bg-tint':'');
+  if(S.slide==='cover'){
+    el.className='slide'+(S.bg==='tint'?' bg-tint':'');
+    el.innerHTML=`<div class="cover"><h1>IDOM 採用成功に向けたご提案</h1><h2>採用成功に向けたご提案</h2></div>`+
+      (S.logo?`<div class="logo" style="color:var(--navy)">${S.logoText}</div>`:'');
+    return;
+  }
+  if(S.slide==='agenda'){
+    const items=['課題提起・共感','業界洞察（誤解と実態）','ターゲット心理','戦略提案①②③','ご提案プラン（料金）','成功事例','次のステップ'];
+    const inner=`<ol class="agenda">${items.map((t,i)=>`<li><span class="num">${String(i+1).padStart(2,'0')}</span>${t}</li>`).join('')}</ol>`;
+    el.innerHTML=chrome(inner,'本日の流れ');return;
+  }
+  if(S.slide==='principles'){
+    const step=(t,d)=>`<div class="step"><div class="tt">${t}</div><div class="dd">${d}</div></div>`;
+    const arr='<div class="arrow">↓</div>';
+    const seo=step('Googleの理念','検索意図に最適な答えを出す')+arr+step('E-E-A-Tの重視','経験・専門性・権威性・信頼性')+arr+step('重複コンテンツはリスク','似た原稿は除外され得る')+'<div class="concl">独自性と具体性が必要</div>';
+    const cvr=step('入口と出口の整合性','検索条件と原稿内容の一致')+arr+step('NG例：情報の不一致','「主婦歓迎」なのに男性写真→離脱')+arr+step('可視化による安心感','写真・具体的な言葉で不安払拭')+'<div class="concl">透明性と安心感が必要</div>';
+    const inner=`<h2>応募獲得の最大化には、ユーザー体験の向上と有益で正しい情報が必要です</h2>
+      <div class="cols"><div class="col"><div class="colhead">SEOの観点（集客の最大化）</div>${seo}</div>
+      <div class="col"><div class="colhead">CVRの観点（応募率の向上）</div>${cvr}</div></div>`;
+    el.innerHTML=chrome(inner,'原稿設計の重要性');return;
+  }
+  if(S.slide==='misconception'){
+    const inner=`<div class="cmp">
+      <div class="col left"><div class="head">求職者が抱くイメージ</div><ul><li>厨房は暑くて過酷そう</li><li>長時間労働で休めない</li><li>覚えることが多くて難しい</li></ul></div>
+      <div class="col right"><div class="head">現場の実態</div><ul><li>空調完備で快適な環境</li><li>固定シフト・当日欠勤OK</li><li>マニュアル完備で初心者歓迎</li></ul></div></div>`;
+    el.innerHTML=chrome(inner,'求職者が持つ「飲食」のイメージと実態のギャップ');return;
+  }
+  if(S.slide==='segment'){
+    const rows=[['主な業務','接客・注文受付・会計','調理・調達・清掃'],['環境','客席（空調）','厨房（高温）'],['勤務時間','時間帯で柔軟','定期シフト'],['必要スキル','接客・コミュ','調理スキル']];
+    const inner=`<table class="cmpt"><tr><th>観点</th><th>ホールスタッフ</th><th>キッチンスタッフ</th></tr>
+      ${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</table>`;
+    el.innerHTML=chrome(inner,'類似セグメントとの違い');return;
+  }
+  if(S.slide==='psychology'){
+    const row=(n,d,a)=>`<div class="axisrow"><div class="axname">${n}</div><div class="axdetail"><div class="cap">具体的な不安・欲求</div>${d}</div><div class="axar">▶</div><div class="axappeal"><div class="cap">訴求の方向性</div>${a}</div></div>`;
+    const inner=`<div class="lead-psy"><span class="lbl">主要ターゲット</span>フリーター（20-35歳）。収入の安定と家庭との両立を重視する層</div>
+      ${row('収入の安定と将来への不安','シフト減・社会保険未加入への懸念','週5勤務可・社会保険加入・時給+200円')}
+      ${row('言語の壁への不安','接客レベルの日本語に不安','日本語研修・多言語マニュアル・キッチン開始')}
+      ${row('家庭との両立が最優先','子育て・介護で休みやすさが必要','当日欠勤OK・柔軟シフト・家族優先文化')}`;
+    el.innerHTML=chrome(inner,'フリーター（20-35歳）が仕事選びで重視する軸');return;
+  }
+  if(S.slide==='strategy'){
+    const card=(n,t,b,chips,c)=>`<div class="card"><div class="num">${n}</div><div class="ttl">${t}</div><div class="body">${b}</div>${chips.map(x=>`<span class="chip">${x}</span>`).join('')}<div class="copyline">例:「${c}」</div></div>`;
+    const inner=`<div class="cards">
+      ${card('01','収入の安定を訴求','フリーターの収入不安を解決し即効性のある採用を促進。',['週5勤務','社保加入','昇給有り'],'週5で働けます◎収入も安定！')}
+      ${card('02','言語スキルの安心設計','接客への不安を解消し多様な応募者を引きつける。',['日本語研修','多言語対応','初心者歓迎'],'はじめてでも安心◎研修あり')}
+      ${card('03','家庭との両立を強調','家庭事情を重視する層をターゲットにする。',['当日欠勤OK','柔軟シフト','短時間可'],'家族との時間を大切に◎柔軟シフト')}
+    </div><div class="concl">この3つの戦略軸で原稿を再設計し、応募獲得を最大化します</div>`;
+    el.innerHTML=chrome(inner,'原稿設計のご提案');return;
+  }
+  if(S.slide==='detail'){
+    const inner=`<div class="lead-psy"><span class="lbl">狙うターゲット心理</span>将来が不安。生活を安定させたいが、アルバイトでは続かないと感じている</div>
+      <div class="para"><div class="old">従来「単なるアルバイト」</div><div class="ar">パラダイムシフト ▶</div><div class="new">新定義「しっかり稼げる仕事」</div></div>
+      <div class="merits"><div class="merit">週5勤務可</div><div class="merit">社会保険加入</div><div class="merit">昇給制度有り</div><div class="merit">固定シフト</div><div class="merit">正社員登用</div></div>
+      <div class="cc"><div class="h">キャッチコピー例</div><ul>
+        <li><span class="ct">週5で働けます◎収入も安定！</span><span class="rs">→ 安定志向の求職者に継続勤務の安心を訴求</span></li>
+        <li><span class="ct">正社員登用あり◎将来が見えます</span><span class="rs">→ キャリアの先行き不安を払拭しエントリーを促す</span></li></ul></div>`;
+    el.innerHTML=chrome(inner,'提案1: 安定収入と未来への安心');return;
+  }
+  if(S.slide==='success'){
+    const inner=`<div class="lead-psy"><span class="lbl">事例概要</span>炭火焼鳥 とり松様（都内3店舗）</div>
+      <div class="ba">
+        <div class="col before"><div class="head">Before</div><div class="metric">コピー:「週4日勤務可」</div><div class="kpis"><div class="kpi"><div class="kv">120</div><div class="kl">PV</div></div><div class="kpi"><div class="kv big">5</div><div class="kl">応募</div></div></div></div>
+        <div class="ba-ar">▶</div>
+        <div class="col after"><div class="head">After</div><div class="metric">コピー:「週5日＋社会保険付き！」</div><div class="kpis"><div class="kpi"><div class="kv">850</div><div class="kl">PV</div></div><div class="kpi"><div class="kv big">42</div><div class="kl">応募</div></div></div></div>
+      </div>
+      <div class="improve"><span class="lbl">改善ポイント</span>応募数が8.4倍に増加、採用率も大幅改善</div>`;
+    el.innerHTML=chrome(inner,'成功事例1');return;
+  }
+  if(S.slide==='keyword'){
+    const col=(t,chips,copies)=>`<div class="kwcol"><div class="kwhead">${t}</div><div class="kwlbl">検索キーワード例</div><div class="kwchips">${chips.map(c=>`<span class="kwchip">${c}</span>`).join('')}</div><div class="kwlbl">掛け合わせ・コピー例</div>${copies.map(c=>`<div class="kwcopy">「${c}」</div>`).join('')}</div>`;
+    const inner=`<div class="lead-psy"><span class="lbl">主要ターゲット</span>フリーター（20-35歳）</div>
+      <div class="kwcols">
+        ${col('収入の安定を訴求',['週5日勤務','社会保険加入','時給+200円','昇給制度'],['週5日×社会保険付き！','時給+200円で安定収入'])}
+        ${col('言語スキルの安心設計',['日本語研修','多言語マニュアル','キッチン開始可'],['日本語研修付き！','キッチンから始めよう'])}
+        ${col('家庭との両立を強調',['当日欠勤OK','柔軟シフト','家族優先文化'],['当日欠勤OK！','柔軟シフトで家族と過ごす時間'])}
+      </div>`;
+    el.innerHTML=chrome(inner,'検索意図を満たすキーワード・コンテンツ提案');return;
+  }
+  if(S.slide==='next'){
+    const sum=[['掲載効果','採用率3.8%→露出拡大が必要'],['採用課題','年齢対象外応募40%の改善'],['予算','月間目標10名・50〜80万円/月'],['競合','インディード/バイトルが主競合']];
+    const acts=[['9月25日までマイナビバイト掲載を継続','h','最優先'],['9月結果をもとに新プラン作成・再提示','h','最優先'],['ADエスプラ・ADマップ・LINEスキマニ導入','m','中'],['北田氏中心・吉田氏佐藤氏の支援体制維持','m','中'],['10月以降の成果評価と拡大調整の準備','l','低']];
+    const acthtml=acts.map((a,i)=>`<li><span class="nsnum">${i+1}</span><span class="nstxt">${a[0]}<span class="nspri ${a[1]}">${a[2]}</span></span></li>`).join('');
+    const inner=`<div class="nscols">
+      <div class="nscol"><div class="nshead">ご提案内容のまとめ</div><ul class="nslist">
+        ${sum.map(s=>`<li><span class="nstag">${s[0]}</span>${s[1]}</li>`).join('')}
+        <li><span class="nstag tagp">推奨</span>松プラン ¥2,620,720</li></ul></div>
+      <div class="nscol"><div class="nshead na">次回までのアクション</div><ol class="nsacts">${acthtml}</ol></div></div>`;
+    el.innerHTML=chrome(inner,'次のステップ');return;
+  }
+  // plan
+  const plan=(g,p,rec,items)=>`<div class="plan${rec?' rec':''}">${rec?'<div class="badge">おすすめ</div>':''}<div class="grade">${g}</div><div class="price">¥${p}</div>${items.map(i=>`<div class="pitem"><span>${i}</span><span>4週間</span></div>`).join('')}</div>`;
+  const inner=`<div class="plans">
+    ${plan('松','2,620,720',true,['外部広告A','ADエスプラ','ADマップ','LINEスキマニ'])}
+    ${plan('竹','1,770,720',false,['外部広告B','ADエスプラ','ADマップ'])}
+    ${plan('梅','1,000,000',false,['外部広告C','基本SNS'])}
+  </div>`;
+  el.innerHTML=chrome(inner,'ご提案プラン（料金）');
+}
+
+// ---- wiring ----
+['cyan','navy','red','tint'].forEach(k=>{
+  document.getElementById('c-'+k).oninput=e=>{setVar('--'+k,e.target.value);renderSlide();};
+});
+document.getElementById('f-font').onchange=()=>{applyFont();};
+document.getElementById('f-logo').oninput=e=>{S.logoText=e.target.value;renderSlide();};
+function segWire(id,key){document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#'+id+' button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+  if(key==='radius'){S.radius=b.dataset.v;setVar('--radius',b.dataset.v+'px');}else{S[key]=b.dataset.v;}renderSlide();});}
+segWire('seg-header','header');segWire('seg-bg','bg');segWire('seg-radius','radius');
+document.getElementById('sw-logo').onchange=e=>{S.logo=e.target.checked;renderSlide();};
+document.getElementById('sw-foot').onchange=e=>{S.foot=e.target.checked;renderSlide();};
+document.getElementById('sw-page').onchange=e=>{S.page=e.target.checked;renderSlide();};
+document.querySelectorAll('.pv-toolbar button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.pv-toolbar button').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.slide=b.dataset.slide;renderSlide();});
+document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.preset').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+  const p=PRESETS[b.dataset.preset];
+  ['cyan','navy','red','tint'].forEach(k=>{setVar('--'+k,p[k]);document.getElementById('c-'+k).value=p[k];});
+  S.header=p.header;S.bg=p.bg;S.radius=p.radius;setVar('--radius',p.radius+'px');
+  document.querySelectorAll('#seg-header button').forEach(x=>x.classList.toggle('active',x.dataset.v===p.header));
+  document.querySelectorAll('#seg-bg button').forEach(x=>x.classList.toggle('active',x.dataset.v===p.bg));
+  document.querySelectorAll('#seg-radius button').forEach(x=>x.classList.toggle('active',x.dataset.v===p.radius));
+  renderSlide();});
+
+renderSecList();renderSlide();
+</script>
+</body>
+</html>
